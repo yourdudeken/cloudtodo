@@ -12,14 +12,17 @@ function App() {
 
   useEffect(() => {
     // Handle OAuth callback
+    const path = window.location.pathname;
     const hash = window.location.hash;
-    if (hash) {
+    
+    // Only handle the callback if we're on the callback path
+    if (path === '/auth/callback' && hash) {
       const params = new URLSearchParams(hash.substring(1));
       const accessToken = params.get('access_token');
       if (accessToken) {
         setAccessToken(accessToken);
-        // Clear the URL
-        window.history.replaceState({}, document.title, window.location.pathname);
+        // Redirect to home page after successful authentication
+        window.location.href = '/';
       }
     }
   }, []);
@@ -33,6 +36,18 @@ function App() {
   const handleLogin = () => {
     window.location.href = getAuthUrl();
   };
+
+  // If we're on the callback page, show a loading state
+  if (window.location.pathname === '/auth/callback') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Authenticating...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
