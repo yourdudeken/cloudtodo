@@ -4,7 +4,7 @@ const SCOPES = [
 ].join(' ');
 
 const CLIENT_ID = '87780100285-d3q1erb6dac6j97n8048niucnld52ccl.apps.googleusercontent.com';
-const REDIRECT_URI = 'http://localhost:5173/auth/callback';
+const REDIRECT_URI = 'https://todolisting.vercel.app/auth/callback';
 const APP_FOLDER_NAME = 'Todo App Data';
 
 export const getAuthUrl = () => {
