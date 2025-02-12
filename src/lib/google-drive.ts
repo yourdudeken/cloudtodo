@@ -6,6 +6,7 @@ const SCOPES = [
 const CLIENT_ID = '87780100285-d3q1erb6dac6j97n8048niucnld52ccl.apps.googleusercontent.com';
 const REDIRECT_URI = 'https://todolisting.vercel.app/auth/callback';
 const APP_FOLDER_NAME = 'Todo App Data';
+const MAIN_FILE_NAME = 'todos.json';
 
 export const getAuthUrl = () => {
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -60,14 +61,6 @@ async function getOrCreateAppFolder(accessToken: string): Promise<string> {
   }
 }
 
-function getTodayFileName(): string {
-  const date = new Date();
-  const day = date.toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase();
-  const dayNum = date.getDate();
-  const month = date.toLocaleDateString('en-US', { month: 'short' }).toLowerCase();
-  return `${day}${dayNum}${month}.json`;
-}
-
 export const createOrUpdateTodoFile = async (todos: any, accessToken: string) => {
   const headers = {
     'Authorization': `Bearer ${accessToken}`,
@@ -76,17 +69,16 @@ export const createOrUpdateTodoFile = async (todos: any, accessToken: string) =>
 
   try {
     const folderId = await getOrCreateAppFolder(accessToken);
-    const fileName = getTodayFileName();
     
-    // Search for today's file in the app folder
+    // Search for main todos file
     const searchResponse = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and '${folderId}' in parents and trashed=false`,
+      `https://www.googleapis.com/drive/v3/files?q=name='${MAIN_FILE_NAME}' and '${folderId}' in parents and trashed=false`,
       { headers }
     );
     const searchData = await searchResponse.json();
 
     const fileMetadata = {
-      name: fileName,
+      name: MAIN_FILE_NAME,
       mimeType: 'application/json',
       parents: [folderId]
     };
@@ -169,38 +161,30 @@ export const getTodos = async (accessToken: string) => {
   try {
     const folderId = await getOrCreateAppFolder(accessToken);
     
-    // Get all JSON files from the app folder
+    // Get the main todos file
     const searchResponse = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=mimeType='application/json' and '${folderId}' in parents and trashed=false&orderBy=createdTime desc`,
+      `https://www.googleapis.com/drive/v3/files?q=name='${MAIN_FILE_NAME}' and '${folderId}' in parents and trashed=false`,
       { headers }
     );
     const searchData = await searchResponse.json();
 
     if (!searchData.files || searchData.files.length === 0) {
+      // Create initial file with empty todos
+      await createOrUpdateTodoFile([], accessToken);
       return [];
     }
 
-    // Get today's file first
-    const todayFileName = getTodayFileName();
-    const todayFile = searchData.files.find(file => file.name === todayFileName);
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${searchData.files[0].id}?alt=media`,
+      { headers }
+    );
     
-    if (todayFile) {
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${todayFile.id}?alt=media`,
-        { headers }
-      );
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch todos file content');
-      }
-      
-      const data = await response.json();
-      return data.todos || [];
+    if (!response.ok) {
+      throw new Error('Failed to fetch todos file content');
     }
-
-    // If no today's file exists, create one with empty todos
-    await createOrUpdateTodoFile([], accessToken);
-    return [];
+    
+    const data = await response.json();
+    return data.todos || [];
   } catch (error) {
     console.error('Error loading todos:', error);
     throw error;
