@@ -27,15 +27,12 @@ function App() {
     }
   }, []);
 
+  // Add this effect to fetch todos when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       fetchTodos();
     }
-  }, [isAuthenticated]);
-
-  const handleLogin = () => {
-    window.location.href = getAuthUrl();
-  };
+  }, [isAuthenticated, fetchTodos]);
 
   // If we're on the callback page, show a loading state
   if (window.location.pathname === '/auth/callback') {
@@ -62,7 +59,7 @@ function App() {
               A beautiful and secure way to manage your tasks, seamlessly integrated with Google Drive.
             </p>
             <button
-              onClick={handleLogin}
+              onClick={() => window.location.href = getAuthUrl()}
               className="inline-flex items-center px-8 py-4 rounded-full text-lg font-semibold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-150"
             >
               <Cloud className="w-6 h-6 mr-2" />
@@ -78,7 +75,7 @@ function App() {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Smart Organization</h3>
               <p className="text-gray-600">
-                Organize tasks with categories, tags, and priorities. Daily files keep everything neat and tidy.
+                Organize tasks with categories, tags, and priorities. Keep everything in one place.
               </p>
             </div>
 
