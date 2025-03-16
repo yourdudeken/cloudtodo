@@ -1,14 +1,16 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuthStore } from './store/auth';
 import { useTodoStore } from './store/todos';
 import { getAuthUrl } from './lib/google-drive';
 import { TodoList } from './components/TodoList';
 import { AddTodo } from './components/AddTodo';
+import { Sidebar } from './components/Sidebar';
 import { LogOut, CheckCircle2, Cloud, Lock, ListTodo } from 'lucide-react';
 
 function App() {
   const { isAuthenticated, setAccessToken, logout } = useAuthStore();
   const { fetchTodos } = useTodoStore();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   useEffect(() => {
     // Handle OAuth callback
@@ -117,20 +119,27 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
-      <div className="max-w-4xl mx-auto py-8 px-4">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">My Tasks</h1>
-          <button
-            onClick={logout}
-            className="flex items-center space-x-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 shadow-sm transition-colors"
-          >
-            <LogOut className="w-5 h-5" />
-            <span>Logout</span>
-          </button>
-        </div>
-        <div className="space-y-8">
-          <AddTodo />
-          <TodoList />
+      <Sidebar isOpen={isSidebarOpen} onToggle={() => setIsSidebarOpen(!isSidebarOpen)} />
+      <div 
+        className={`transition-all duration-300 ${
+          isSidebarOpen ? 'ml-64' : 'ml-16'
+        }`}
+      >
+        <div className="max-w-4xl mx-auto py-8 px-4">
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900">My Tasks</h1>
+            <button
+              onClick={logout}
+              className="flex items-center space-x-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 shadow-sm transition-colors"
+            >
+              <LogOut className="w-5 h-5" />
+              <span>Logout</span>
+            </button>
+          </div>
+          <div className="space-y-8">
+            <AddTodo />
+            <TodoList />
+          </div>
         </div>
       </div>
     </div>

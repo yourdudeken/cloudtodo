@@ -1,12 +1,5 @@
-import brain from 'brain.js';
 import { differenceInMinutes } from 'date-fns';
 import { Todo } from '../types/todo';
-
-// Neural network for priority prediction
-const priorityNet = new brain.NeuralNetwork();
-
-// Neural network for completion time prediction
-const timeNet = new brain.NeuralNetwork();
 
 interface TaskData {
   taskName: string;
@@ -14,97 +7,60 @@ interface TaskData {
   timestamp: string;
 }
 
+// Simple priority scoring system
+const calculatePriorityScore = (todo: Partial<Todo>): number => {
+  let score = 0.5; // Default medium priority
+
+  if (todo.dueDate) {
+    const daysUntilDue = differenceInMinutes(new Date(todo.dueDate), new Date()) / (24 * 60);
+    if (daysUntilDue <= 1) score += 0.3;
+    else if (daysUntilDue <= 3) score += 0.2;
+    else if (daysUntilDue <= 7) score += 0.1;
+  }
+
+  if (todo.isRecurring) score -= 0.1;
+  if (todo.subtasks?.length) score += 0.1;
+  if (todo.isStarred) score += 0.1;
+  if (todo.isPinned) score += 0.2;
+
+  return Math.min(Math.max(score, 0), 1); // Ensure score is between 0 and 1
+};
+
 // Load historical task data from localStorage
 const getTaskHistory = (): TaskData[] => {
   return JSON.parse(localStorage.getItem('taskData') || '[]');
+};
+
+// Save task data to localStorage
+const saveTaskHistory = (data: TaskData[]) => {
+  localStorage.setItem('taskData', JSON.stringify(data));
 };
 
 // Log task completion data
 export const logTaskCompletion = (taskName: string, timeTaken: number) => {
   const data = getTaskHistory();
   data.push({ taskName, timeTaken, timestamp: new Date().toISOString() });
-  localStorage.setItem('taskData', JSON.stringify(data));
-  trainNetworks(); // Retrain networks with new data
-};
-
-// Prepare training data for priority prediction
-const preparePriorityTrainingData = (todos: Todo[]) => {
-  return todos
-    .filter(todo => todo.completed)
-    .map(todo => ({
-      input: {
-        dueDate: todo.dueDate ? differenceInMinutes(new Date(todo.dueDate), new Date()) / (24 * 60) : 0,
-        isRecurring: todo.isRecurring ? 1 : 0,
-        hasSubtasks: todo.subtasks.length > 0 ? 1 : 0,
-        isStarred: todo.isStarred ? 1 : 0,
-        isPinned: todo.isPinned ? 1 : 0,
-      },
-      output: {
-        priority: todo.priority === 'high' ? 1 : todo.priority === 'medium' ? 0.5 : 0,
-      },
-    }));
-};
-
-// Prepare training data for completion time prediction
-const prepareTimeTrainingData = () => {
-  const history = getTaskHistory();
-  return history.map(entry => ({
-    input: {
-      taskNameLength: entry.taskName.length / 100, // Normalize task name length
-      hour: new Date(entry.timestamp).getHours() / 24, // Normalize hour
-      dayOfWeek: new Date(entry.timestamp).getDay() / 7, // Normalize day
-    },
-    output: {
-      timeTaken: entry.timeTaken / 480, // Normalize time taken (max 8 hours)
-    },
-  }));
-};
-
-// Train both neural networks
-export const trainNetworks = (todos: Todo[] = []) => {
-  // Train priority network
-  const priorityTrainingData = preparePriorityTrainingData(todos);
-  if (priorityTrainingData.length > 0) {
-    priorityNet.train(priorityTrainingData, {
-      iterations: 1000,
-      errorThresh: 0.005,
-    });
-  }
-
-  // Train time prediction network
-  const timeTrainingData = prepareTimeTrainingData();
-  if (timeTrainingData.length > 0) {
-    timeNet.train(timeTrainingData, {
-      iterations: 1000,
-      errorThresh: 0.005,
-    });
-  }
+  saveTaskHistory(data);
 };
 
 // Predict priority for a new task
 export const predictPriority = (todo: Partial<Todo>): number => {
-  const input = {
-    dueDate: todo.dueDate ? differenceInMinutes(new Date(todo.dueDate), new Date()) / (24 * 60) : 0,
-    isRecurring: todo.isRecurring ? 1 : 0,
-    hasSubtasks: todo.subtasks?.length ? 1 : 0,
-    isStarred: todo.isStarred ? 1 : 0,
-    isPinned: todo.isPinned ? 1 : 0,
-  };
-
-  const result = priorityNet.run(input);
-  return result.priority;
+  return calculatePriorityScore(todo);
 };
 
-// Predict completion time for a task
+// Predict completion time based on similar tasks
 export const predictCompletionTime = (taskName: string): number => {
-  const input = {
-    taskNameLength: taskName.length / 100,
-    hour: new Date().getHours() / 24,
-    dayOfWeek: new Date().getDay() / 7,
-  };
+  const history = getTaskHistory();
+  const similarTasks = history.filter(task => 
+    task.taskName.toLowerCase().includes(taskName.toLowerCase()) ||
+    taskName.toLowerCase().includes(task.taskName.toLowerCase())
+  );
 
-  const result = timeNet.run(input);
-  return Math.round(result.timeTaken * 480); // Convert back to minutes
+  if (similarTasks.length === 0) return 30; // Default 30 minutes
+
+  // Calculate average completion time
+  const totalTime = similarTasks.reduce((sum, task) => sum + task.timeTaken, 0);
+  return Math.round(totalTime / similarTasks.length);
 };
 
 // Generate task suggestions based on patterns
@@ -134,4 +90,10 @@ export const generateSuggestions = (todos: Todo[]): string[] => {
     .sort(([, a], [, b]) => b - a)
     .slice(0, 3)
     .map(([taskName]) => taskName);
+};
+
+// Initialize or train the system
+export const trainNetworks = (todos: Todo[] = []) => {
+  // No training needed for this simplified version
+  return;
 };

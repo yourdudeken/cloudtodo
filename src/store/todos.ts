@@ -63,6 +63,10 @@ export const useTodoStore = create<TodoState>((set, get) => ({
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       priority: priority > 0.7 ? 'high' : priority > 0.3 ? 'medium' : 'low',
+      subtasks: [],
+      attachments: [],
+      comments: [],
+      tags: todo.tags || [],
     };
 
     const todos = [...get().todos, newTodo];
@@ -110,7 +114,8 @@ export const useTodoStore = create<TodoState>((set, get) => ({
       
       await get().updateTodo(id, { 
         completed: !todo.completed,
-        completedAt: !todo.completed ? new Date().toISOString() : undefined
+        completedAt: !todo.completed ? new Date().toISOString() : undefined,
+        actualDuration: !todo.completed ? timeTaken : undefined
       });
     }
   },
