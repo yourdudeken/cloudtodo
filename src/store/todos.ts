@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { Todo } from '../types/todo';
-import { createOrUpdateTodoFile, getTodos } from '../lib/google-drive';
+import { api } from '../lib/api';
 import { useAuthStore } from './auth';
+import { trainNetworks, predictPriority, predictCompletionTime, generateSuggestions, logTaskCompletion } from '../lib/ai';
 
 interface TodoState {
   todos: Todo[];
@@ -10,6 +11,7 @@ interface TodoState {
   view: 'list' | 'kanban' | 'calendar';
   theme: 'light' | 'dark' | 'system';
   categories: string[];
+  suggestions: string[];
   fetchTodos: () => Promise<void>;
   addTodo: (todo: Omit<Todo, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateTodo: (id: string, todo: Partial<Todo>) => Promise<void>;
@@ -23,17 +25,9 @@ interface TodoState {
   addAttachment: (todoId: string, attachment: Omit<Attachment, 'id' | 'uploadedAt'>) => Promise<void>;
   setView: (view: 'list' | 'kanban' | 'calendar') => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
-  filterTodos: (filters: {
-    category?: string;
-    tags?: string[];
-    priority?: 'low' | 'medium' | 'high';
-    completed?: boolean;
-    starred?: boolean;
-    pinned?: boolean;
-  }) => Todo[];
-  getRecurringTodos: () => Todo[];
-  getDueTodos: () => Todo[];
-  getOverdueTodos: () => Todo[];
+  updateSuggestions: () => void;
+  getPredictedCompletionTime: (taskName: string) => number;
+  logCompletion: (taskName: string, timeTaken: number) => void;
 }
 
 export const useTodoStore = create<TodoState>((set, get) => ({
@@ -43,33 +37,32 @@ export const useTodoStore = create<TodoState>((set, get) => ({
   view: 'list',
   theme: 'system',
   categories: [],
+  suggestions: [],
 
   fetchTodos: async () => {
-    const accessToken = useAuthStore.getState().accessToken;
-    if (!accessToken) return;
-
     set({ isLoading: true });
     try {
-      const todos = await getTodos(accessToken);
+      const todos = await api.fetchTodos();
       set({ 
         todos,
         categories: [...new Set(todos.map(todo => todo.category).filter(Boolean))],
         isLoading: false 
       });
+      trainNetworks(todos);
+      get().updateSuggestions();
     } catch (error) {
       set({ error: 'Failed to fetch todos', isLoading: false });
     }
   },
 
   addTodo: async (todo) => {
-    const accessToken = useAuthStore.getState().accessToken;
-    if (!accessToken) return;
-
+    const priority = predictPriority(todo);
     const newTodo: Todo = {
       ...todo,
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      priority: priority > 0.7 ? 'high' : priority > 0.3 ? 'medium' : 'low',
     };
 
     const todos = [...get().todos, newTodo];
@@ -77,13 +70,11 @@ export const useTodoStore = create<TodoState>((set, get) => ({
       todos,
       categories: [...new Set(todos.map(t => t.category).filter(Boolean))]
     });
-    await createOrUpdateTodoFile(todos, accessToken);
+    await api.saveTodos(todos);
+    get().updateSuggestions();
   },
 
   updateTodo: async (id, updates) => {
-    const accessToken = useAuthStore.getState().accessToken;
-    if (!accessToken) return;
-
     const todos = get().todos.map((todo) =>
       todo.id === id
         ? { ...todo, ...updates, updatedAt: new Date().toISOString() }
@@ -93,25 +84,34 @@ export const useTodoStore = create<TodoState>((set, get) => ({
       todos,
       categories: [...new Set(todos.map(todo => todo.category).filter(Boolean))]
     });
-    await createOrUpdateTodoFile(todos, accessToken);
+    await api.saveTodos(todos);
+    trainNetworks(todos);
   },
 
   deleteTodo: async (id) => {
-    const accessToken = useAuthStore.getState().accessToken;
-    if (!accessToken) return;
-
     const todos = get().todos.filter((todo) => todo.id !== id);
     set({ 
       todos,
       categories: [...new Set(todos.map(todo => todo.category).filter(Boolean))]
     });
-    await createOrUpdateTodoFile(todos, accessToken);
+    await api.saveTodos(todos);
+    get().updateSuggestions();
   },
 
   toggleTodoComplete: async (id) => {
     const todo = get().todos.find(t => t.id === id);
     if (todo) {
-      await get().updateTodo(id, { completed: !todo.completed });
+      const startTime = todo.startTime ? new Date(todo.startTime).getTime() : Date.now();
+      const timeTaken = Math.round((Date.now() - startTime) / (1000 * 60)); // Convert to minutes
+      
+      if (!todo.completed) {
+        logTaskCompletion(todo.title, timeTaken);
+      }
+      
+      await get().updateTodo(id, { 
+        completed: !todo.completed,
+        completedAt: !todo.completed ? new Date().toISOString() : undefined
+      });
     }
   },
 
@@ -183,36 +183,17 @@ export const useTodoStore = create<TodoState>((set, get) => ({
   setView: (view) => set({ view }),
   setTheme: (theme) => set({ theme }),
 
-  filterTodos: ({ category, tags, priority, completed, starred, pinned }) => {
-    return get().todos.filter(todo => {
-      if (category && todo.category !== category) return false;
-      if (tags && !tags.every(tag => todo.tags.includes(tag))) return false;
-      if (priority && todo.priority !== priority) return false;
-      if (completed !== undefined && todo.completed !== completed) return false;
-      if (starred !== undefined && todo.isStarred !== starred) return false;
-      if (pinned !== undefined && todo.isPinned !== pinned) return false;
-      return true;
-    });
+  updateSuggestions: () => {
+    const suggestions = generateSuggestions(get().todos);
+    set({ suggestions });
   },
 
-  getRecurringTodos: () => {
-    return get().todos.filter(todo => todo.isRecurring);
+  getPredictedCompletionTime: (taskName: string) => {
+    return predictCompletionTime(taskName);
   },
 
-  getDueTodos: () => {
-    const now = new Date();
-    return get().todos.filter(todo => {
-      if (!todo.dueDate) return false;
-      const dueDate = new Date(todo.dueDate);
-      return dueDate > now && dueDate <= new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    });
-  },
-
-  getOverdueTodos: () => {
-    const now = new Date();
-    return get().todos.filter(todo => {
-      if (!todo.dueDate) return false;
-      return new Date(todo.dueDate) < now && !todo.completed;
-    });
+  logCompletion: (taskName: string, timeTaken: number) => {
+    logTaskCompletion(taskName, timeTaken);
+    trainNetworks(get().todos);
   },
 }));

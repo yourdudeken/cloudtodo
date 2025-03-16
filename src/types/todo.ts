@@ -18,6 +18,10 @@ export interface Todo {
   isPinned?: boolean;
   createdAt: string;
   updatedAt: string;
+  completedAt?: string;
+  startTime?: string;
+  predictedDuration?: number;
+  actualDuration?: number;
   subtasks: SubTask[];
   attachments: Attachment[];
   comments: Comment[];

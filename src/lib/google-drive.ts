@@ -3,8 +3,8 @@ const SCOPES = [
   'https://www.googleapis.com/auth/drive.appdata'
 ].join(' ');
 
-const CLIENT_ID = '87780100285-d3q1erb6dac6j97n8048niucnld52ccl.apps.googleusercontent.com';
-const REDIRECT_URI = 'https://todolisting.vercel.app/auth/callback';
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const REDIRECT_URI = import.meta.env.VITE_GOOGLE_REDIRECT_URI;
 const APP_FOLDER_NAME = 'Todo App Data';
 const MAIN_FILE_NAME = 'todos.json';
 
