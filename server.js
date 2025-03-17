@@ -8,8 +8,12 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import session from 'cookie-session';
 import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 
 const app = express();
+
+// Store verification codes (in production, use Redis or similar)
+const verificationCodes = new Map();
 
 // Email transporter setup
 const transporter = nodemailer.createTransport({
@@ -38,24 +42,34 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Google OAuth Strategy
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "/auth/google/callback",
-    prompt: 'select_account'
-  },
-  (accessToken, refreshToken, profile, done) => {
-    // Store tokens for Drive API access
-    profile.accessToken = accessToken;
-    profile.refreshToken = refreshToken;
-    done(null, profile);
-  }
-));
+// Generate verification code
+const generateVerificationCode = () => {
+  return crypto.randomInt(100000, 999999).toString();
+};
 
-// Serialize/Deserialize user
-passport.serializeUser((user, done) => done(null, user));
-passport.deserializeUser((user, done) => done(null, user));
+// Send verification code email
+const sendVerificationCode = async (email, code) => {
+  const mailOptions = {
+    from: `"Task Manager Security" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: '🔐 Your Verification Code',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1a56db;">Verification Code</h2>
+        <p>Your verification code is:</p>
+        <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+          <span style="font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #1a56db;">${code}</span>
+        </div>
+        <p style="color: #6b7280; font-size: 14px;">
+          This code will expire in 5 minutes.<br>
+          If you didn't request this code, please ignore this email.
+        </p>
+      </div>
+    `
+  };
+
+  await transporter.sendMail(mailOptions);
+};
 
 // Email notification function
 async function sendTaskReminder(userEmail, userName, taskName, dueDate, priority, taskLink) {
@@ -87,6 +101,40 @@ async function sendTaskReminder(userEmail, userName, taskName, dueDate, priority
   }
 }
 
+// Google OAuth Strategy
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: "/auth/google/callback",
+    prompt: 'select_account'
+  },
+  async (accessToken, refreshToken, profile, done) => {
+    try {
+      // Generate and store verification code
+      const code = generateVerificationCode();
+      verificationCodes.set(profile.emails[0].value, {
+        code,
+        timestamp: Date.now(),
+        attempts: 0
+      });
+
+      // Send verification code
+      await sendVerificationCode(profile.emails[0].value, code);
+
+      // Store tokens for Drive API access
+      profile.accessToken = accessToken;
+      profile.refreshToken = refreshToken;
+      done(null, profile);
+    } catch (error) {
+      done(error);
+    }
+  }
+));
+
+// Serialize/Deserialize user
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((user, done) => done(null, user));
+
 // Auth Routes
 app.get('/auth/google',
   passport.authenticate('google', {
@@ -103,9 +151,50 @@ app.get('/auth/google',
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/' }),
   (req, res) => {
-    res.redirect('/dashboard');
+    res.redirect('/verify');
   }
 );
+
+// Verification endpoint
+app.post('/auth/verify', (req, res) => {
+  const { code } = req.body;
+  const user = req.user;
+
+  if (!user || !user.emails || !user.emails[0]) {
+    return res.status(401).json({ success: false, message: 'User not found' });
+  }
+
+  const email = user.emails[0].value;
+  const verification = verificationCodes.get(email);
+
+  if (!verification) {
+    return res.status(401).json({ success: false, message: 'No verification code found' });
+  }
+
+  // Check if code is expired (5 minutes)
+  if (Date.now() - verification.timestamp > 5 * 60 * 1000) {
+    verificationCodes.delete(email);
+    return res.status(401).json({ success: false, message: 'Verification code expired' });
+  }
+
+  // Check attempts
+  if (verification.attempts >= 3) {
+    verificationCodes.delete(email);
+    return res.status(401).json({ success: false, message: 'Too many attempts' });
+  }
+
+  // Increment attempts
+  verification.attempts++;
+
+  // Check code
+  if (verification.code !== code) {
+    return res.status(401).json({ success: false, message: 'Invalid code' });
+  }
+
+  // Success - clean up and proceed
+  verificationCodes.delete(email);
+  return res.json({ success: true });
+});
 
 app.get('/auth/logout', (req, res) => {
   req.logout();

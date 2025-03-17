@@ -3,15 +3,17 @@ import { Todo } from '../types/todo';
 import { api } from '../lib/api';
 import { useAuthStore } from './auth';
 import { trainNetworks, predictPriority, predictCompletionTime, generateSuggestions, logTaskCompletion } from '../lib/ai';
+import { notificationService } from '../lib/notifications';
 
 interface TodoState {
   todos: Todo[];
   isLoading: boolean;
   error: string | null;
-  view: 'list' | 'kanban' | 'calendar';
+  view: 'list' | 'kanban' | 'calendar' | 'pinned' | 'starred' | 'recent';
   theme: 'light' | 'dark' | 'system';
   categories: string[];
   suggestions: string[];
+  notificationsEnabled: boolean;
   fetchTodos: () => Promise<void>;
   addTodo: (todo: Omit<Todo, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateTodo: (id: string, todo: Partial<Todo>) => Promise<void>;
@@ -23,8 +25,9 @@ interface TodoState {
   updateSubtask: (todoId: string, subtaskId: string, completed: boolean) => Promise<void>;
   addComment: (todoId: string, comment: Omit<Comment, 'id' | 'createdAt'>) => Promise<void>;
   addAttachment: (todoId: string, attachment: Omit<Attachment, 'id' | 'uploadedAt'>) => Promise<void>;
-  setView: (view: 'list' | 'kanban' | 'calendar') => void;
+  setView: (view: 'list' | 'kanban' | 'calendar' | 'pinned' | 'starred' | 'recent') => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
+  toggleNotifications: () => void;
   updateSuggestions: () => void;
   getPredictedCompletionTime: (taskName: string) => number;
   logCompletion: (taskName: string, timeTaken: number) => void;
@@ -38,6 +41,7 @@ export const useTodoStore = create<TodoState>((set, get) => ({
   theme: 'system',
   categories: [],
   suggestions: [],
+  notificationsEnabled: true,
 
   fetchTodos: async () => {
     set({ isLoading: true });
@@ -187,6 +191,16 @@ export const useTodoStore = create<TodoState>((set, get) => ({
 
   setView: (view) => set({ view }),
   setTheme: (theme) => set({ theme }),
+
+  toggleNotifications: () => {
+    const currentState = get().notificationsEnabled;
+    if (!currentState) {
+      notificationService.resetNotification('all');
+    } else {
+      notificationService.stop();
+    }
+    set({ notificationsEnabled: !currentState });
+  },
 
   updateSuggestions: () => {
     const suggestions = generateSuggestions(get().todos);
