@@ -16,15 +16,16 @@ function App() {
   useEffect(() => {
     // Handle OAuth callback
     const path = window.location.pathname;
-    const hash = window.location.hash;
+    const searchParams = new URLSearchParams(window.location.search);
     
     // Only handle the callback if we're on the callback path
-    if (path === '/auth/callback' && hash) {
-      const params = new URLSearchParams(hash.substring(1));
-      const accessToken = params.get('access_token');
-      if (accessToken) {
-        setAccessToken(accessToken);
-        // Redirect to home page after successful authentication
+    if (path === '/auth/callback') {
+      const code = searchParams.get('code');
+      if (code) {
+        setAccessToken(code);
+        // Redirect will be handled by the server after token exchange
+      } else {
+        console.error('No authorization code found in callback URL');
         window.location.href = '/';
       }
     }

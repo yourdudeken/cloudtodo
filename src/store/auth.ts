@@ -63,16 +63,31 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      setAccessToken: async (token: string) => {
+      setAccessToken: async (code: string) => {
         try {
-          const profile = await getUserProfile(token);
+          const response = await fetch('http://localhost:3001/auth/google/callback', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ code }),
+            credentials: 'include',
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to exchange code for token');
+          }
+
+          const { accessToken } = await response.json();
+          const profile = await getUserProfile(accessToken);
+          
           set({ 
-            accessToken: token,
+            accessToken,
             user: profile,
             isVerifying: true 
           });
         } catch (error) {
-          console.error('Error fetching user profile:', error);
+          console.error('Error exchanging code for token:', error);
           throw error;
         }
       },

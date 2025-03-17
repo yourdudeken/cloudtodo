@@ -8,7 +8,7 @@ const SCOPES = [
 ].join(' ');
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const REDIRECT_URI = import.meta.env.VITE_GOOGLE_REDIRECT_URI;
+const REDIRECT_URI = 'http://localhost:5173/auth/callback';
 const APP_FOLDER_NAME = 'Todo App Data';
 const MAIN_FILE_NAME = 'todos.json';
 
@@ -18,7 +18,7 @@ export const getAuthUrl = () => {
   // Add all required OAuth parameters
   url.searchParams.append('client_id', CLIENT_ID);
   url.searchParams.append('redirect_uri', REDIRECT_URI);
-  url.searchParams.append('response_type', 'token');
+  url.searchParams.append('response_type', 'code');  // Changed from 'token' to 'code'
   url.searchParams.append('scope', SCOPES);
   url.searchParams.append('access_type', 'offline');
   url.searchParams.append('prompt', 'consent');
@@ -56,7 +56,7 @@ export const getUserProfile = async (accessToken: string) => {
       email: emailInfo.email,
       locale: userInfo.locale,
       verified_email: emailInfo.verified_email,
-      hd: emailInfo.hd // Hosted domain (for Google Workspace users)
+      hd: emailInfo.hd
     };
   } catch (error) {
     console.error('Error fetching user profile:', error);

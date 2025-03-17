@@ -26,7 +26,7 @@ const transporter = nodemailer.createTransport({
 
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: 'http://localhost:5173',
   credentials: true
 }));
 app.use(bodyParser.json());
@@ -105,7 +105,7 @@ async function sendTaskReminder(userEmail, userName, taskName, dueDate, priority
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "/auth/google/callback",
+    callbackURL: "http://localhost:3001/auth/google/callback",
     prompt: 'select_account'
   },
   async (accessToken, refreshToken, profile, done) => {
@@ -149,9 +149,9 @@ app.get('/auth/google',
 );
 
 app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/' }),
+  passport.authenticate('google', { failureRedirect: 'http://localhost:5173' }),
   (req, res) => {
-    res.redirect('/verify');
+    res.redirect('http://localhost:5173/verify');
   }
 );
 
@@ -198,7 +198,7 @@ app.post('/auth/verify', (req, res) => {
 
 app.get('/auth/logout', (req, res) => {
   req.logout();
-  res.redirect('/');
+  res.redirect('http://localhost:5173');
 });
 
 // Auth check middleware
@@ -278,7 +278,7 @@ app.post("/api/send-reminder", isAuthenticated, async (req, res) => {
   const { taskName, dueDate, priority } = req.body;
   const userEmail = req.user.emails[0].value;
   const userName = req.user.displayName;
-  const taskLink = `${process.env.CLIENT_URL}/task/${req.body.taskId}`;
+  const taskLink = `http://localhost:5173/task/${req.body.taskId}`;
 
   try {
     const success = await sendTaskReminder(
@@ -302,4 +302,4 @@ app.post("/api/send-reminder", isAuthenticated, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, 'localhost', () => console.log(`Server running on http://localhost:${PORT}`));
