@@ -22,4 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.bak
+*.cache
+*.csproj.user
+*.dbmdl
+*.jfm
 *.env
