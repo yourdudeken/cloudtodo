@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useTodoStore } from '../store/todos';
 import { CalendarView } from './CalendarView';
+import { KanbanBoard } from './KanbanBoard';
 import { 
   Trash2, Edit, CheckSquare, Square, Star, AlertCircle,
   Calendar, Clock, Paperclip, MessageSquare, Pin, ChevronDown,
   ChevronUp, Save, X
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 
 export const TodoList: React.FC = () => {
   const { 
@@ -356,12 +357,37 @@ export const TodoList: React.FC = () => {
     </div>
   );
 
+  const renderStarredView = () => (
+    <div className="space-y-4">
+      <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-6">⭐ Starred Tasks</h2>
+      {todos
+        .filter((todo) => todo.isStarred)
+        .map((todo) => renderTodoItem(todo))}
+    </div>
+  );
+
+  const renderRecentView = () => {
+    const recentDate = subDays(new Date(), 7); // Show tasks from last 7 days
+    const recentTodos = todos
+      .filter(todo => new Date(todo.createdAt) >= recentDate)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return (
+      <div className="space-y-4">
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-6">🕒 Recent Tasks</h2>
+        {recentTodos.map(todo => renderTodoItem(todo))}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
       {view === 'list' && renderTodoList()}
       {view === 'pinned' && renderPinnedView()}
+      {view === 'starred' && renderStarredView()}
       {view === 'calendar' && <CalendarView />}
-      {/* Add Kanban view here */}
+      {view === 'kanban' && <KanbanBoard />}
+      {view === 'recent' && renderRecentView()}
     </div>
   );
 };

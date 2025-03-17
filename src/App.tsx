@@ -10,7 +10,7 @@ import { CheckCircle2, Cloud, Lock, ListTodo } from 'lucide-react';
 
 function App() {
   const { isAuthenticated, setAccessToken, user, isVerifying, verifyCode } = useAuthStore();
-  const { fetchTodos, theme } = useTodoStore();
+  const { fetchTodos, theme, view } = useTodoStore();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   useEffect(() => {
@@ -66,10 +66,10 @@ function App() {
   }
 
   // Show verification dialog if needed
-  if (isVerifying && user?.emails?.[0]?.value) {
+  if (isVerifying && user?.email) {
     return (
       <DigitVerification
-        email={user.emails[0].value}
+        email={user.email}
         onVerify={handleVerification}
         onCancel={() => window.location.href = '/'}
       />
@@ -155,10 +155,17 @@ function App() {
       >
         <div className="max-w-4xl mx-auto py-8 px-4">
           <div className="flex justify-between items-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">My Tasks</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              {view === 'list' && 'My Tasks'}
+              {view === 'pinned' && 'Pinned Tasks'}
+              {view === 'starred' && 'Starred Tasks'}
+              {view === 'calendar' && 'Calendar View'}
+              {view === 'recent' && 'Recent Tasks'}
+              {view === 'kanban' && 'Kanban Board'}
+            </h1>
           </div>
           <div className="space-y-8">
-            <AddTodo />
+            {view === 'list' && <AddTodo />}
             <TodoList />
           </div>
         </div>

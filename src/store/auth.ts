@@ -36,8 +36,26 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        await api.logout();
-        set({ isAuthenticated: false, user: null, accessToken: null });
+        try {
+          await api.logout();
+          // Clear local storage
+          localStorage.removeItem('auth-storage');
+          localStorage.removeItem('todos-storage');
+          
+          // Reset state
+          set({ 
+            isAuthenticated: false, 
+            user: null, 
+            accessToken: null,
+            isVerifying: false
+          });
+          
+          // Redirect to home
+          window.location.href = '/';
+        } catch (error) {
+          console.error('Logout failed:', error);
+          throw error;
+        }
       },
 
       setAccessToken: async (token: string) => {
