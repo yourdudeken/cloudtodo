@@ -1,6 +1,10 @@
+import { google } from 'googleapis';
+
 const SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/drive.appdata'
+  'https://www.googleapis.com/auth/drive.appdata',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/userinfo.email'
 ].join(' ');
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -15,6 +19,37 @@ export const getAuthUrl = () => {
   url.searchParams.append('response_type', 'token');
   url.searchParams.append('scope', SCOPES);
   return url.toString();
+};
+
+export const getUserProfile = async (accessToken: string) => {
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    const response = await fetch(
+      'https://www.googleapis.com/oauth2/v2/userinfo',
+      { headers }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch user profile');
+    }
+
+    const data = await response.json();
+    return {
+      id: data.id,
+      email: data.email,
+      name: data.name,
+      picture: data.picture,
+      locale: data.locale,
+      verified_email: data.verified_email
+    };
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    throw error;
+  }
 };
 
 async function getOrCreateAppFolder(accessToken: string): Promise<string> {

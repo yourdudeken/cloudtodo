@@ -12,7 +12,8 @@ import {
   Sun,
   Moon,
   LogOut,
-  Pin
+  Pin,
+  User
 } from 'lucide-react';
 import { useTodoStore } from '../store/todos';
 import { useAuthStore } from '../store/auth';
@@ -24,7 +25,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const { view, setView, theme, setTheme } = useTodoStore();
-  const { logout } = useAuthStore();
+  const { logout, user } = useAuthStore();
   const [showSettings, setShowSettings] = useState(false);
 
   const menuItems = [
@@ -59,9 +60,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
       <div className="p-4 border-b dark:border-gray-700">
         <div className="flex items-center space-x-3">
-          <ListTodo className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+          {user?.picture ? (
+            <img 
+              src={user.picture} 
+              alt={user.name || 'User'} 
+              className="w-8 h-8 rounded-full"
+            />
+          ) : (
+            <User className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+          )}
           {isOpen && (
-            <span className="font-semibold text-xl text-gray-800 dark:text-gray-200">Tasks</span>
+            <div className="flex flex-col">
+              <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">
+                {user?.name || 'User'}
+              </span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {user?.email}
+              </span>
+            </div>
           )}
         </div>
       </div>
@@ -126,5 +142,3 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     </div>
   );
 };
-
-export { Sidebar }
