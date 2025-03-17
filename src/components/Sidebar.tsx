@@ -12,12 +12,12 @@ import {
   Sun,
   Moon,
   LogOut,
-  Pin,
   User,
   Mail,
   Globe,
   Shield,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle
 } from 'lucide-react';
 import { useTodoStore } from '../store/todos';
 import { useAuthStore } from '../store/auth';
@@ -32,10 +32,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const { logout, user } = useAuthStore();
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', view: 'list' },
-    { icon: Pin, label: 'Pinned', view: 'pinned' },
     { icon: Kanban, label: 'Kanban', view: 'kanban' },
     { icon: Calendar, label: 'Calendar', view: 'calendar' },
     { icon: Star, label: 'Starred', view: 'starred' },
@@ -44,6 +44,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
+  };
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await logout();
+    } catch (error) {
+      console.error('Logout failed:', error);
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -122,11 +132,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
             </div>
             <div className="pt-2 border-t dark:border-gray-700">
               <button
-                onClick={logout}
-                className="w-full flex items-center space-x-2 px-2 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className={`w-full flex items-center justify-between px-2 py-1.5 rounded
+                  ${isLoggingOut
+                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                    : 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+                  }`}
               >
-                <LogOut className="w-4 h-4" />
-                <span>Sign Out</span>
+                <div className="flex items-center space-x-2">
+                  <LogOut className="w-4 h-4" />
+                  <span>{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
+                </div>
+                {isLoggingOut && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-red-500 border-t-transparent" />
+                )}
               </button>
             </div>
           </div>

@@ -28,23 +28,30 @@ export const getUserProfile = async (accessToken: string) => {
   };
 
   try {
-    const response = await fetch(
-      'https://www.googleapis.com/oauth2/v2/userinfo',
-      { headers }
-    );
+    const [userInfoResponse, emailResponse] = await Promise.all([
+      fetch('https://www.googleapis.com/oauth2/v2/userinfo', { headers }),
+      fetch('https://www.googleapis.com/oauth2/v2/userinfo', { headers })
+    ]);
 
-    if (!response.ok) {
+    if (!userInfoResponse.ok || !emailResponse.ok) {
       throw new Error('Failed to fetch user profile');
     }
 
-    const data = await response.json();
+    const [userInfo, emailInfo] = await Promise.all([
+      userInfoResponse.json(),
+      emailResponse.json()
+    ]);
+
     return {
-      id: data.id,
-      email: data.email,
-      name: data.name,
-      picture: data.picture,
-      locale: data.locale,
-      verified_email: data.verified_email
+      id: userInfo.id,
+      name: userInfo.name,
+      givenName: userInfo.given_name,
+      familyName: userInfo.family_name,
+      picture: userInfo.picture,
+      email: emailInfo.email,
+      locale: userInfo.locale,
+      verified_email: emailInfo.verified_email,
+      hd: emailInfo.hd // Hosted domain (for Google Workspace users)
     };
   } catch (error) {
     console.error('Error fetching user profile:', error);

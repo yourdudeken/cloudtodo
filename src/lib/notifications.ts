@@ -47,7 +47,19 @@ class NotificationService {
         const dueDate = parseISO(todo.dueDate);
         const minutesUntilDue = differenceInMinutes(dueDate, now);
 
-        // Notification thresholds
+        // Check for reminder time
+        if (todo.reminder) {
+          const reminderTime = parseISO(todo.reminder);
+          const minutesUntilReminder = differenceInMinutes(reminderTime, now);
+
+          if (minutesUntilReminder <= 1 && minutesUntilReminder > 0) {
+            this.showNotification(todo, 'reminder');
+            this.sendEmailNotification(todo, 'reminder');
+            return;
+          }
+        }
+
+        // Due date notifications
         const thresholds = [
           { minutes: 24 * 60, message: '24 hours' }, // 1 day before
           { minutes: 60, message: '1 hour' },        // 1 hour before
@@ -77,13 +89,18 @@ class NotificationService {
   private showNotification(todo: Todo, timeframe: string) {
     if (!('Notification' in window)) return;
 
-    const title = timeframe === 'overdue'
-      ? `⚠️ Task Overdue: ${todo.title}`
-      : `⏰ Upcoming Task: ${todo.title}`;
+    let title, body;
 
-    const body = timeframe === 'overdue'
-      ? `This task is now overdue!`
-      : `This task is due in ${timeframe}.`;
+    if (timeframe === 'reminder') {
+      title = `⏰ Task Reminder: ${todo.title}`;
+      body = `It's time for your scheduled task!`;
+    } else if (timeframe === 'overdue') {
+      title = `⚠️ Task Overdue: ${todo.title}`;
+      body = `This task is now overdue!`;
+    } else {
+      title = `⏰ Upcoming Task: ${todo.title}`;
+      body = `This task is due in ${timeframe}.`;
+    }
 
     const notification = new Notification(title, {
       body,

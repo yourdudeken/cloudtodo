@@ -12,7 +12,22 @@ export const api = {
   },
 
   async logout(): Promise<void> {
-    await axios.get(`${API_URL}/auth/logout`);
+    try {
+      await axios.get(`${API_URL}/auth/logout`);
+      
+      // Clear axios defaults
+      delete axios.defaults.headers.common['Authorization'];
+      
+      // Clear any stored cookies
+      document.cookie.split(';').forEach(cookie => {
+        document.cookie = cookie
+          .replace(/^ +/, '')
+          .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
+      });
+    } catch (error) {
+      console.error('Logout request failed:', error);
+      // Continue with local cleanup even if the request fails
+    }
   },
 
   async verifyCode(code: string): Promise<boolean> {

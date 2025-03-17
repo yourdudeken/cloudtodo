@@ -5,11 +5,14 @@ import { getUserProfile } from '../lib/google-drive';
 
 interface UserProfile {
   id: string;
-  email: string;
   name: string;
+  givenName?: string;
+  familyName?: string;
+  email: string;
   picture: string;
   locale: string;
   verified_email: boolean;
+  hd?: string;
 }
 
 interface AuthState {
@@ -38,9 +41,11 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         try {
           await api.logout();
-          // Clear local storage
+          
+          // Clear all auth-related storage
           localStorage.removeItem('auth-storage');
           localStorage.removeItem('todos-storage');
+          sessionStorage.clear();
           
           // Reset state
           set({ 
@@ -50,7 +55,7 @@ export const useAuthStore = create<AuthState>()(
             isVerifying: false
           });
           
-          // Redirect to home
+          // Redirect to home page
           window.location.href = '/';
         } catch (error) {
           console.error('Logout failed:', error);
@@ -88,6 +93,11 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
+      partialize: (state) => ({
+        isAuthenticated: state.isAuthenticated,
+        user: state.user,
+        accessToken: state.accessToken
+      })
     }
   )
 );
