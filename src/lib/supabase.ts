@@ -15,6 +15,35 @@ export const getCurrentUser = async () => {
   return user;
 };
 
+export const getNotificationPreferences = async () => {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('No user logged in');
+
+  const { data, error } = await supabase
+    .from('notification_preferences')
+    .select('*')
+    .eq('user_id', user.id);
+
+  if (error) throw error;
+  return data;
+};
+
+export const updateNotificationPreferences = async (type: string, enabled: boolean) => {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('No user logged in');
+
+  const { data, error } = await supabase
+    .from('notification_preferences')
+    .update({ enabled })
+    .eq('user_id', user.id)
+    .eq('type', type)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
 export const syncTaskWithSupabase = async (task: any) => {
   const user = await getCurrentUser();
   if (!user) throw new Error('No user logged in');
@@ -24,13 +53,13 @@ export const syncTaskWithSupabase = async (task: any) => {
     .upsert({
       id: task.id,
       user_id: user.id,
-      google_drive_id: task.googleDriveId,
       title: task.title,
       description: task.description,
       priority: task.priority,
       is_pinned: task.isPinned,
       is_starred: task.isStarred,
       due_date: task.dueDate,
+      reminder: task.reminder,
       completed_at: task.completedAt,
       category: task.category,
       tags: task.tags,

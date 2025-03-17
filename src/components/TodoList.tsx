@@ -4,7 +4,7 @@ import { CalendarView } from './CalendarView';
 import { KanbanBoard } from './KanbanBoard';
 import { 
   Trash2, Edit, CheckSquare, Square, Star, AlertCircle,
-  Calendar, Clock, Paperclip, MessageSquare, ChevronDown,
+  Calendar, Clock, Paperclip, MessageSquare, Pin, ChevronDown,
   ChevronUp, Save, X
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
@@ -12,7 +12,7 @@ import { format, subDays } from 'date-fns';
 export const TodoList: React.FC = () => {
   const { 
     todos, updateTodo, deleteTodo, toggleTodoComplete,
-    toggleStarred, view
+    toggleStarred, togglePinned, view
   } = useTodoStore();
   const [expandedTodo, setExpandedTodo] = useState<string | null>(null);
   const [editingTodo, setEditingTodo] = useState<string | null>(null);
@@ -110,7 +110,9 @@ export const TodoList: React.FC = () => {
     return (
       <div
         key={todo.id}
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4"
+        className={`bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 ${
+          todo.isPinned ? 'border-2 border-blue-500 dark:border-blue-400' : ''
+        }`}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4 flex-1">
@@ -171,6 +173,14 @@ export const TodoList: React.FC = () => {
               } hover:text-yellow-500`}
             >
               <Star className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => togglePinned(todo.id)}
+              className={`${
+                todo.isPinned ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'
+              } hover:text-blue-500`}
+            >
+              <Pin className="w-5 h-5" />
             </button>
             <AlertCircle
               className={`w-5 h-5 ${getPriorityColor(todo.priority)}`}
@@ -318,7 +328,32 @@ export const TodoList: React.FC = () => {
 
   const renderTodoList = () => (
     <div className="space-y-4">
-      {todos.map((todo) => renderTodoItem(todo))}
+      {/* Pinned todos */}
+      {todos.some((todo) => todo.isPinned) && (
+        <div className="space-y-2">
+          <h2 className="text-lg font-medium text-gray-700 dark:text-gray-200">📌 Pinned</h2>
+          {todos
+            .filter((todo) => todo.isPinned)
+            .map((todo) => renderTodoItem(todo))}
+        </div>
+      )}
+
+      {/* Regular todos */}
+      <div className="space-y-2">
+        <h2 className="text-lg font-medium text-gray-700 dark:text-gray-200">📝 Tasks</h2>
+        {todos
+          .filter((todo) => !todo.isPinned)
+          .map((todo) => renderTodoItem(todo))}
+      </div>
+    </div>
+  );
+
+  const renderPinnedView = () => (
+    <div className="space-y-4">
+      <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-6">📌 Pinned Tasks</h2>
+      {todos
+        .filter((todo) => todo.isPinned)
+        .map((todo) => renderTodoItem(todo))}
     </div>
   );
 
@@ -348,6 +383,7 @@ export const TodoList: React.FC = () => {
   return (
     <div className="space-y-4">
       {view === 'list' && renderTodoList()}
+      {view === 'pinned' && renderPinnedView()}
       {view === 'starred' && renderStarredView()}
       {view === 'calendar' && <CalendarView />}
       {view === 'kanban' && <KanbanBoard />}

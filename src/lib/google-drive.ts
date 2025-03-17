@@ -14,10 +14,15 @@ const MAIN_FILE_NAME = 'todos.json';
 
 export const getAuthUrl = () => {
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  
+  // Add all required OAuth parameters
   url.searchParams.append('client_id', CLIENT_ID);
   url.searchParams.append('redirect_uri', REDIRECT_URI);
   url.searchParams.append('response_type', 'token');
   url.searchParams.append('scope', SCOPES);
+  url.searchParams.append('access_type', 'offline');
+  url.searchParams.append('prompt', 'consent');
+  
   return url.toString();
 };
 

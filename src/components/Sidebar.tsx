@@ -11,13 +11,13 @@ import {
   Kanban,
   Sun,
   Moon,
-  LogOut,
   User,
   Mail,
   Globe,
   Shield,
   ChevronDown,
-  AlertTriangle
+  AlertTriangle,
+  Pin
 } from 'lucide-react';
 import { useTodoStore } from '../store/todos';
 import { useAuthStore } from '../store/auth';
@@ -36,6 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', view: 'list' },
+    { icon: Pin, label: 'Pinned', view: 'pinned' },
     { icon: Kanban, label: 'Kanban', view: 'kanban' },
     { icon: Calendar, label: 'Calendar', view: 'calendar' },
     { icon: Star, label: 'Starred', view: 'starred' },
