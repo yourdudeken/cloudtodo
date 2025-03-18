@@ -1,144 +1,65 @@
-import { differenceInMinutes, addMinutes, parseISO } from 'date-fns';
-import { Todo } from '../types/todo';
-import { api } from './api';
+import { useAuthStore } from '@/store/auth';
 
 class NotificationService {
   private static instance: NotificationService;
-  private checkInterval: number = 60000; // Check every minute
-  private intervalId?: number;
-  private notifiedTasks: Set<string> = new Set();
+  private permission: NotificationPermission = 'default';
 
   private constructor() {
-    this.requestPermission();
+    this.initializePermission();
   }
 
-  static getInstance(): NotificationService {
+  public static getInstance(): NotificationService {
     if (!NotificationService.instance) {
       NotificationService.instance = new NotificationService();
     }
     return NotificationService.instance;
   }
 
-  private async requestPermission() {
-    if ('Notification' in window) {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        this.startNotificationCheck();
-      }
-    }
-  }
-
-  private startNotificationCheck() {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
+  private async initializePermission() {
+    if (!('Notification' in window)) {
+      console.warn('This browser does not support notifications');
+      return;
     }
 
-    this.intervalId = window.setInterval(() => {
-      this.checkForDueTasks();
-    }, this.checkInterval);
+    this.permission = await Notification.requestPermission();
   }
 
-  private async checkForDueTasks() {
-    const todos = await api.fetchTodos();
+  public async requestPermission(): Promise<boolean> {
+    if (!('Notification' in window)) {
+      return false;
+    }
+
+    const permission = await Notification.requestPermission();
+    this.permission = permission;
+    return permission === 'granted';
+  }
+
+  public async showNotification(title: string, options?: NotificationOptions) {
+    if (this.permission !== 'granted') {
+      const granted = await this.requestPermission();
+      if (!granted) return;
+    }
+
+    return new Notification(title, {
+      icon: '/notification-icon.png',
+      badge: '/notification-badge.png',
+      ...options,
+    });
+  }
+
+  public async scheduleNotification(
+    title: string,
+    options: NotificationOptions,
+    date: Date
+  ) {
     const now = new Date();
+    const delay = date.getTime() - now.getTime();
 
-    todos.forEach(todo => {
-      if (!todo.completed && todo.dueDate && !this.notifiedTasks.has(todo.id)) {
-        const dueDate = parseISO(todo.dueDate);
-        const minutesUntilDue = differenceInMinutes(dueDate, now);
+    if (delay <= 0) return;
 
-        // Check for reminder time
-        if (todo.reminder) {
-          const reminderTime = parseISO(todo.reminder);
-          const minutesUntilReminder = differenceInMinutes(reminderTime, now);
-
-          if (minutesUntilReminder <= 1 && minutesUntilReminder > 0) {
-            this.showNotification(todo, 'reminder');
-            this.sendEmailNotification(todo, 'reminder');
-            return;
-          }
-        }
-
-        // Due date notifications
-        const thresholds = [
-          { minutes: 24 * 60, message: '24 hours' }, // 1 day before
-          { minutes: 60, message: '1 hour' },        // 1 hour before
-          { minutes: 30, message: '30 minutes' },    // 30 minutes before
-          { minutes: 15, message: '15 minutes' },    // 15 minutes before
-          { minutes: 5, message: '5 minutes' }       // 5 minutes before
-        ];
-
-        thresholds.forEach(threshold => {
-          if (minutesUntilDue <= threshold.minutes && minutesUntilDue > threshold.minutes - 1) {
-            this.showNotification(todo, threshold.message);
-            this.sendEmailNotification(todo, threshold.message);
-            this.notifiedTasks.add(todo.id);
-          }
-        });
-
-        // Overdue notification
-        if (minutesUntilDue < 0 && minutesUntilDue > -5) { // Within 5 minutes of being overdue
-          this.showNotification(todo, 'overdue');
-          this.sendEmailNotification(todo, 'overdue');
-          this.notifiedTasks.add(todo.id);
-        }
-      }
-    });
-  }
-
-  private showNotification(todo: Todo, timeframe: string) {
-    if (!('Notification' in window)) return;
-
-    let title, body;
-
-    if (timeframe === 'reminder') {
-      title = `⏰ Task Reminder: ${todo.title}`;
-      body = `It's time for your scheduled task!`;
-    } else if (timeframe === 'overdue') {
-      title = `⚠️ Task Overdue: ${todo.title}`;
-      body = `This task is now overdue!`;
-    } else {
-      title = `⏰ Upcoming Task: ${todo.title}`;
-      body = `This task is due in ${timeframe}.`;
-    }
-
-    const notification = new Notification(title, {
-      body,
-      icon: '/favicon.ico',
-      badge: '/favicon.ico',
-      tag: todo.id, // Prevents duplicate notifications
-      renotify: true,
-      requireInteraction: true,
-      silent: false,
-      data: {
-        taskId: todo.id,
-        url: window.location.origin + '/task/' + todo.id
-      }
-    });
-
-    notification.onclick = () => {
-      window.focus();
-      window.location.href = notification.data.url;
-    };
-  }
-
-  private async sendEmailNotification(todo: Todo, timeframe: string) {
-    try {
-      await api.sendReminder(todo);
-    } catch (error) {
-      console.error('Failed to send email notification:', error);
-    }
-  }
-
-  public resetNotification(taskId: string) {
-    this.notifiedTasks.delete(taskId);
-  }
-
-  public stop() {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = undefined;
-    }
+    setTimeout(() => {
+      this.showNotification(title, options);
+    }, delay);
   }
 }
 

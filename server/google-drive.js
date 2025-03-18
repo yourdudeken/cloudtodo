@@ -1,33 +1,15 @@
 import CryptoJS from 'crypto-js';
-import mime from 'mime-types';
 
 const TASK_FILE_NAME = 'todo-tasks.json';
 const ENCRYPTION_KEY = 'your-secret-key'; // In production, use environment variable
 
-export interface GoogleDriveConfig {
-  accessToken: string;
-  clientId: string;
-}
-
-export interface FileAttachment {
-  id: string;
-  name: string;
-  mimeType: string;
-  size: number;
-  thumbnailUrl?: string;
-  downloadUrl: string;
-}
-
 export class GoogleDriveService {
-  private accessToken: string;
-  private clientId: string;
-
-  constructor(config: GoogleDriveConfig) {
+  constructor(config) {
     this.accessToken = config.accessToken;
     this.clientId = config.clientId;
   }
 
-  private async findOrCreateTaskFile(): Promise<string | null> {
+  async findOrCreateTaskFile() {
     try {
       const response = await fetch(
         'https://www.googleapis.com/drive/v3/files?q=name="' +
@@ -52,7 +34,7 @@ export class GoogleDriveService {
     }
   }
 
-  private async createTaskFile(): Promise<string | null> {
+  async createTaskFile() {
     try {
       const metadata = {
         name: TASK_FILE_NAME,
@@ -85,76 +67,16 @@ export class GoogleDriveService {
     }
   }
 
-  private encrypt(data: string): string {
+  encrypt(data) {
     return CryptoJS.AES.encrypt(data, ENCRYPTION_KEY).toString();
   }
 
-  private decrypt(data: string): string {
+  decrypt(data) {
     const bytes = CryptoJS.AES.decrypt(data, ENCRYPTION_KEY);
     return bytes.toString(CryptoJS.enc.Utf8);
   }
 
-  async uploadFile(file: File, taskId: string): Promise<FileAttachment | null> {
-    try {
-      const metadata = {
-        name: file.name,
-        mimeType: file.type || mime.lookup(file.name) || 'application/octet-stream',
-        description: `Attachment for task: ${taskId}`,
-        properties: {
-          taskId: taskId,
-        },
-      };
-
-      const form = new FormData();
-      form.append(
-        'metadata',
-        new Blob([JSON.stringify(metadata)], { type: 'application/json' })
-      );
-      form.append('file', file);
-
-      const response = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,thumbnailLink,webContentLink',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-          },
-          body: form,
-        }
-      );
-
-      const data = await response.json();
-      
-      return {
-        id: data.id,
-        name: data.name,
-        mimeType: data.mimeType,
-        size: data.size,
-        thumbnailUrl: data.thumbnailLink,
-        downloadUrl: data.webContentLink,
-      };
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      return null;
-    }
-  }
-
-  async deleteFile(fileId: string): Promise<boolean> {
-    try {
-      await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-        },
-      });
-      return true;
-    } catch (error) {
-      console.error('Error deleting file:', error);
-      return false;
-    }
-  }
-
-  async saveTasks(tasks: any[]): Promise<boolean> {
+  async saveTasks(tasks) {
     try {
       const fileId = await this.findOrCreateTaskFile();
       if (!fileId) return false;
@@ -192,7 +114,7 @@ export class GoogleDriveService {
     }
   }
 
-  async loadTasks(): Promise<any[]> {
+  async loadTasks() {
     try {
       const fileId = await this.findOrCreateTaskFile();
       if (!fileId) return [];
