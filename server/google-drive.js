@@ -1,68 +1,92 @@
+import { google } from 'googleapis';
 import CryptoJS from 'crypto-js';
 
-const TASK_FILE_NAME = 'todo-tasks.json';
-const ENCRYPTION_KEY = 'your-secret-key'; // In production, use environment variable
+const TASKS_FOLDER_NAME = 'CloudTask';
+const TASK_DATA_FILE = 'tasks.json';
+const ENCRYPTION_KEY = process.env.VITE_ENCRYPTION_KEY || 'your-secret-key';
 
 export class GoogleDriveService {
   constructor(config) {
-    this.accessToken = config.accessToken;
-    this.clientId = config.clientId;
+    this.auth = new google.auth.OAuth2(config.clientId);
+    this.auth.setCredentials({ access_token: config.accessToken });
+    this.drive = google.drive({ version: 'v3', auth: this.auth });
+    this.tasksFolderId = null;
+    this.taskDataFileId = null;
   }
 
-  async findOrCreateTaskFile() {
-    try {
-      const response = await fetch(
-        'https://www.googleapis.com/drive/v3/files?q=name="' +
-          TASK_FILE_NAME +
-          '"',
-        {
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-          },
-        }
-      );
+  async findOrCreateTasksFolder() {
+    if (this.tasksFolderId) return this.tasksFolderId;
 
-      const data = await response.json();
-      if (data.files && data.files.length > 0) {
-        return data.files[0].id;
+    try {
+      // Search for existing folder
+      const response = await this.drive.files.list({
+        q: `name='${TASKS_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder'`,
+        fields: 'files(id, name)',
+      });
+
+      if (response.data.files.length > 0) {
+        this.tasksFolderId = response.data.files[0].id;
+        return this.tasksFolderId;
       }
 
-      return this.createTaskFile();
+      // Create new folder
+      const folderMetadata = {
+        name: TASKS_FOLDER_NAME,
+        mimeType: 'application/vnd.google-apps.folder',
+      };
+
+      const folder = await this.drive.files.create({
+        resource: folderMetadata,
+        fields: 'id',
+      });
+
+      this.tasksFolderId = folder.data.id;
+      return this.tasksFolderId;
     } catch (error) {
-      console.error('Error finding task file:', error);
+      console.error('Error finding/creating tasks folder:', error);
       return null;
     }
   }
 
-  async createTaskFile() {
+  async findOrCreateTaskDataFile() {
+    if (this.taskDataFileId) return this.taskDataFileId;
+
+    const folderId = await this.findOrCreateTasksFolder();
+    if (!folderId) return null;
+
     try {
-      const metadata = {
-        name: TASK_FILE_NAME,
-        mimeType: 'application/json',
+      // Search for existing file
+      const response = await this.drive.files.list({
+        q: `name='${TASK_DATA_FILE}' and '${folderId}' in parents`,
+        fields: 'files(id, name)',
+      });
+
+      if (response.data.files.length > 0) {
+        this.taskDataFileId = response.data.files[0].id;
+        return this.taskDataFileId;
+      }
+
+      // Create new file
+      const fileMetadata = {
+        name: TASK_DATA_FILE,
+        parents: [folderId],
       };
 
-      const form = new FormData();
-      form.append(
-        'metadata',
-        new Blob([JSON.stringify(metadata)], { type: 'application/json' })
-      );
-      form.append('file', new Blob(['[]'], { type: 'application/json' }));
+      const media = {
+        mimeType: 'application/json',
+        body: '[]',
+      };
 
-      const response = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-          },
-          body: form,
-        }
-      );
+      const file = await this.drive.files.create({
+        resource: fileMetadata,
+        media: media,
+        fields: 'id',
+      });
 
-      const data = await response.json();
-      return data.id;
+      this.taskDataFileId = file.data.id;
+      return this.taskDataFileId;
     } catch (error) {
-      console.error('Error creating task file:', error);
+      console.error('Error finding/creating task data file:', error);
       return null;
     }
   }
@@ -77,35 +101,19 @@ export class GoogleDriveService {
   }
 
   async saveTasks(tasks) {
+    const fileId = await this.findOrCreateTaskDataFile();
+    if (!fileId) return false;
+
     try {
-      const fileId = await this.findOrCreateTaskFile();
-      if (!fileId) return false;
-
       const encryptedData = this.encrypt(JSON.stringify(tasks));
-      const metadata = {
-        mimeType: 'application/json',
-      };
 
-      const form = new FormData();
-      form.append(
-        'metadata',
-        new Blob([JSON.stringify(metadata)], { type: 'application/json' })
-      );
-      form.append(
-        'file',
-        new Blob([encryptedData], { type: 'application/json' })
-      );
-
-      await fetch(
-        `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`,
-        {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-          },
-          body: form,
-        }
-      );
+      await this.drive.files.update({
+        fileId: fileId,
+        media: {
+          mimeType: 'application/json',
+          body: encryptedData,
+        },
+      });
 
       return true;
     } catch (error) {
@@ -115,20 +123,16 @@ export class GoogleDriveService {
   }
 
   async loadTasks() {
+    const fileId = await this.findOrCreateTaskDataFile();
+    if (!fileId) return [];
+
     try {
-      const fileId = await this.findOrCreateTaskFile();
-      if (!fileId) return [];
+      const response = await this.drive.files.get({
+        fileId: fileId,
+        alt: 'media',
+      });
 
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-        {
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-          },
-        }
-      );
-
-      const encryptedData = await response.text();
+      const encryptedData = response.data;
       const decryptedData = this.decrypt(encryptedData);
       return JSON.parse(decryptedData);
     } catch (error) {

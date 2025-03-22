@@ -34,6 +34,37 @@ export interface TaskUpdate {
 }
 
 export class AISuggestionsService {
+  static async searchTasks(query: string, tasks: Task[]): Promise<string[]> {
+    try {
+      const openai = getOpenAIInstance();
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: "You are a task management AI assistant. Help users find and understand their tasks by providing intelligent search results and insights."
+          },
+          {
+            role: "user",
+            content: `Search query: "${query}"\n\nAvailable tasks: ${JSON.stringify(tasks, null, 2)}\n\nProvide relevant insights, suggestions, and task groupings based on the search query.`
+          }
+        ]
+      });
+
+      const content = completion.choices[0].message.content;
+      if (!content) return [];
+
+      // Split the content into separate insights
+      return content.split('\n').filter(line => line.trim());
+    } catch (error) {
+      console.error('Error searching tasks:', error);
+      if (error instanceof Error && error.message.includes('API key')) {
+        throw new Error('OpenAI API key is not properly configured. Please check your environment settings.');
+      }
+      return [];
+    }
+  }
+
   static async suggestTasks(existingTasks: Task[]): Promise<TaskSuggestion[]> {
     try {
       const openai = getOpenAIInstance();

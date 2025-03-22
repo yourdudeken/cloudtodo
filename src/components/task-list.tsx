@@ -8,8 +8,9 @@ import { useLocation } from '@/lib/hooks';
 import { CalendarView } from './calendar-view';
 import { KanbanBoard } from './kanban-board';
 import { AISuggestions } from './ai-suggestions';
+import { SearchBar } from './search-bar';
+import { EditTaskDialog } from './edit-task-dialog';
 import mime from 'mime-types';
-import { EditTaskDialog } from './edit-task-dialog.tsx';
 
 export function TaskList() {
   const tasks = useTaskStore((state) => state.tasks);
@@ -34,12 +35,10 @@ export function TaskList() {
     return FileIcon;
   };
 
-  // If we're on the calendar route, render the calendar view
   if (pathname === '/calendar') {
     return <CalendarView />;
   }
 
-  // If we're on the kanban route, render the kanban board
   if (pathname === '/kanban') {
     return <KanbanBoard />;
   }
@@ -110,9 +109,11 @@ export function TaskList() {
     <div className="max-w-4xl mx-auto">
       {getViewTitle()}
       
+      <SearchBar />
+
       {filteredTasks.length === 0 ? (
         <div className="text-center py-12">
-          <div className="text-gray-400 mb-4">
+          <div className="text-gray-400 dark:text-gray-500 mb-4">
             {pathname === '/pinned' && <Pin className="h-12 w-12 mx-auto mb-4" />}
             {pathname === '/starred' && <Star className="h-12 w-12 mx-auto mb-4" />}
             {pathname === '/recent' && <Clock className="h-12 w-12 mx-auto mb-4" />}
@@ -120,11 +121,11 @@ export function TaskList() {
           </div>
         </div>
       ) : (
-        <div className="space-y-2 bg-white rounded-lg shadow-sm border">
+        <div className="space-y-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700">
           {filteredTasks.map((task) => (
             <div
               key={task.id}
-              className="flex items-start gap-3 p-4 hover:bg-gray-50 group border-b last:border-b-0"
+              className="flex items-start gap-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 group border-b dark:border-gray-700 last:border-b-0"
             >
               <Button
                 variant="ghost"
@@ -141,17 +142,16 @@ export function TaskList() {
               
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <span className={task.completed ? 'line-through text-gray-400' : 'font-medium'}>
+                  <span className={`${task.completed ? 'line-through text-gray-400 dark:text-gray-500' : 'font-medium text-gray-900 dark:text-gray-100'}`}>
                     {task.title}
                   </span>
-                  {task.isPinned && <Pin className="h-4 w-4 text-gray-500" />}
+                  {task.isPinned && <Pin className="h-4 w-4 text-gray-500 dark:text-gray-400" />}
                   {task.isStarred && <Star className="h-4 w-4 text-yellow-400 fill-current" />}
                 </div>
                 {task.description && (
-                  <p className="text-sm text-gray-500 mt-1">{task.description}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{task.description}</p>
                 )}
                 
-                {/* Attachments */}
                 {task.attachments && task.attachments.length > 0 && (
                   <div className="mt-3 space-y-2">
                     {task.attachments.map((attachment) => {
@@ -159,22 +159,22 @@ export function TaskList() {
                       return (
                         <div
                           key={attachment.id}
-                          className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded"
+                          className="flex items-center gap-2 text-sm bg-gray-50 dark:bg-gray-700 p-2 rounded"
                         >
-                          <Icon className="h-4 w-4 text-gray-500" />
-                          <span className="flex-1 truncate">{attachment.name}</span>
+                          <Icon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                          <span className="flex-1 truncate text-gray-700 dark:text-gray-300">{attachment.name}</span>
                           <div className="flex items-center gap-1">
                             <a
                               href={attachment.downloadUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="p-1 hover:bg-gray-200 rounded"
+                              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                             >
-                              <Download className="h-4 w-4 text-gray-500" />
+                              <Download className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                             </a>
                             <button
                               onClick={() => deleteAttachment(task.id, attachment.id)}
-                              className="p-1 hover:bg-gray-200 rounded text-red-500"
+                              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-red-500 dark:text-red-400"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -188,13 +188,13 @@ export function TaskList() {
                 {(task.category || task.tags?.length > 0) && (
                   <div className="flex items-center gap-2 mt-2">
                     {task.category && (
-                      <div className="flex items-center gap-1 text-xs bg-gray-100 px-2 py-1 rounded">
+                      <div className="flex items-center gap-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-1 rounded">
                         <Category className="h-3 w-3" />
                         {task.category}
                       </div>
                     )}
                     {task.tags?.map((tag) => (
-                      <div key={tag} className="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded">
+                      <div key={tag} className="flex items-center gap-1 text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-1 rounded">
                         <Tag className="h-3 w-3" />
                         {tag}
                       </div>
@@ -205,7 +205,7 @@ export function TaskList() {
 
               <div className="flex items-center gap-3">
                 {task.dueDate && (
-                  <span className="text-sm text-gray-500 flex items-center gap-1">
+                  <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
                     {format(task.dueDate, 'MMM d')}
                     {task.dueTime && ` at ${task.dueTime}`}
@@ -213,7 +213,6 @@ export function TaskList() {
                 )}
                 <Flag className={`h-4 w-4 ${priorityColors[task.priority]}`} />
                 
-                {/* Task Actions */}
                 <div className="opacity-0 group-hover:opacity-100 flex items-center gap-2">
                   <Button
                     variant="ghost"
@@ -221,12 +220,12 @@ export function TaskList() {
                     className="h-8 w-8"
                     onClick={() => setTaskToEdit(task.id)}
                   >
-                    <Edit2 className="h-4 w-4 text-gray-500" />
+                    <Edit2 className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                    className="h-8 w-8 text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
                     onClick={() => setShowDeleteConfirm(task.id)}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -238,7 +237,6 @@ export function TaskList() {
         </div>
       )}
 
-      {/* Edit Task Dialog */}
       {taskToEdit && (
         <EditTaskDialog
           taskId={taskToEdit}
@@ -246,7 +244,6 @@ export function TaskList() {
         />
       )}
 
-      {/* Delete Confirmation Dialog */}
       <Dialog.Root open={!!showDeleteConfirm} onOpenChange={() => setShowDeleteConfirm(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/50" />

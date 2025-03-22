@@ -107,7 +107,7 @@ export function AddTaskDialog() {
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
         <Button
-          className="w-full justify-start gap-3 bg-blue-600 hover:bg-blue-700 text-white mb-4 mx-2"
+          className="w-[90%] justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white"
         >
           <Plus className="h-5 w-5" />
           Add Task
@@ -359,7 +359,6 @@ export function AddTaskDialog() {
               </div>
             </div>
 
-            {/* File attachments */}
             <div className="space-y-2">
               <input
                 type="file"

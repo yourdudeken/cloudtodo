@@ -73,6 +73,47 @@
   body {
     @apply bg-background text-foreground antialiased;
   }
+  
+  /* Ensure text is visible in dark mode */
+  .dark {
+    color-scheme: dark;
+  }
+  
+  .dark a:not(.button) {
+    @apply text-blue-400 hover:text-blue-300;
+  }
+  
+  .dark .text-gray-500 {
+    @apply text-gray-400;
+  }
+  
+  .dark .text-gray-600 {
+    @apply text-gray-300;
+  }
+  
+  .dark .text-gray-700 {
+    @apply text-gray-200;
+  }
+  
+  .dark .text-gray-900 {
+    @apply text-gray-50;
+  }
+  
+  .dark .bg-white {
+    @apply bg-gray-900;
+  }
+  
+  .dark .bg-gray-50 {
+    @apply bg-gray-800;
+  }
+  
+  .dark .bg-gray-100 {
+    @apply bg-gray-800;
+  }
+  
+  .dark .border-gray-200 {
+    @apply border-gray-700;
+  }
 }
 
 @layer utilities {

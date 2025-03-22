@@ -28,7 +28,7 @@ class EmailNotificationService {
             <p style="color: #4b5563;">Due: ${new Date(task.dueDate).toLocaleString()}</p>
           </div>
           <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
-            This is an automated reminder from your task management system.
+            This is an automated reminder from CloudTask.
           </p>
         </div>
       `,

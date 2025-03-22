@@ -1,8 +1,10 @@
 import CryptoJS from 'crypto-js';
 import mime from 'mime-types';
+import { taskCache } from './cache';
 
-const TASK_FILE_NAME = 'todo-tasks.json';
-const ENCRYPTION_KEY = 'your-secret-key'; // In production, use environment variable
+const TASKS_FOLDER_NAME = 'CloudTask';
+const TASK_DATA_FILE = 'tasks.json';
+const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY || 'your-secret-key';
 
 export interface GoogleDriveConfig {
   accessToken: string;
@@ -18,21 +20,42 @@ export interface FileAttachment {
   downloadUrl: string;
 }
 
+export interface TaskComment {
+  id: string;
+  userId: string;
+  userEmail: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface TaskCollaborator {
+  id: string;
+  userId: string;
+  userEmail: string;
+  role: 'viewer' | 'editor';
+  createdAt: string;
+}
+
 export class GoogleDriveService {
   private accessToken: string;
   private clientId: string;
+  private tasksFolderId: string | null = null;
+  private taskDataFileId: string | null = null;
+  private lastSyncTimestamp: number = 0;
+  private readonly SYNC_INTERVAL = 30000; // 30 seconds
 
   constructor(config: GoogleDriveConfig) {
     this.accessToken = config.accessToken;
     this.clientId = config.clientId;
   }
 
-  private async findOrCreateTaskFile(): Promise<string | null> {
+  private async findOrCreateTasksFolder(): Promise<string | null> {
+    if (this.tasksFolderId) return this.tasksFolderId;
+
     try {
+      // Search for existing folder
       const response = await fetch(
-        'https://www.googleapis.com/drive/v3/files?q=name="' +
-          TASK_FILE_NAME +
-          '"',
+        `https://www.googleapis.com/drive/v3/files?q=name='${TASKS_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder'`,
         {
           headers: {
             Authorization: `Bearer ${this.accessToken}`,
@@ -41,21 +64,67 @@ export class GoogleDriveService {
       );
 
       const data = await response.json();
+      
       if (data.files && data.files.length > 0) {
-        return data.files[0].id;
+        this.tasksFolderId = data.files[0].id;
+        return this.tasksFolderId;
       }
 
-      return this.createTaskFile();
+      // Create new folder
+      const metadata = {
+        name: TASKS_FOLDER_NAME,
+        mimeType: 'application/vnd.google-apps.folder',
+      };
+
+      const createResponse = await fetch(
+        'https://www.googleapis.com/drive/v3/files',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(metadata),
+        }
+      );
+
+      const folder = await createResponse.json();
+      this.tasksFolderId = folder.id;
+      return this.tasksFolderId;
     } catch (error) {
-      console.error('Error finding task file:', error);
+      console.error('Error finding/creating tasks folder:', error);
       return null;
     }
   }
 
-  private async createTaskFile(): Promise<string | null> {
+  private async findOrCreateTaskDataFile(): Promise<string | null> {
+    if (this.taskDataFileId) return this.taskDataFileId;
+
+    const folderId = await this.findOrCreateTasksFolder();
+    if (!folderId) return null;
+
     try {
+      // Search for existing file
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=name='${TASK_DATA_FILE}' and '${folderId}' in parents`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+      
+      if (data.files && data.files.length > 0) {
+        this.taskDataFileId = data.files[0].id;
+        return this.taskDataFileId;
+      }
+
+      // Create new file
       const metadata = {
-        name: TASK_FILE_NAME,
+        name: TASK_DATA_FILE,
+        parents: [folderId],
         mimeType: 'application/json',
       };
 
@@ -66,7 +135,7 @@ export class GoogleDriveService {
       );
       form.append('file', new Blob(['[]'], { type: 'application/json' }));
 
-      const response = await fetch(
+      const createResponse = await fetch(
         'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
         {
           method: 'POST',
@@ -77,10 +146,11 @@ export class GoogleDriveService {
         }
       );
 
-      const data = await response.json();
-      return data.id;
+      const file = await createResponse.json();
+      this.taskDataFileId = file.id;
+      return this.taskDataFileId;
     } catch (error) {
-      console.error('Error creating task file:', error);
+      console.error('Error finding/creating task data file:', error);
       return null;
     }
   }
@@ -94,14 +164,22 @@ export class GoogleDriveService {
     return bytes.toString(CryptoJS.enc.Utf8);
   }
 
+  private shouldSync(): boolean {
+    return Date.now() - this.lastSyncTimestamp >= this.SYNC_INTERVAL;
+  }
+
   async uploadFile(file: File, taskId: string): Promise<FileAttachment | null> {
+    const folderId = await this.findOrCreateTasksFolder();
+    if (!folderId) return null;
+
     try {
       const metadata = {
         name: file.name,
+        parents: [folderId],
         mimeType: file.type || mime.lookup(file.name) || 'application/octet-stream',
-        description: `Attachment for task: ${taskId}`,
-        properties: {
+        appProperties: {
           taskId: taskId,
+          uploadDate: new Date().toISOString(),
         },
       };
 
@@ -113,7 +191,7 @@ export class GoogleDriveService {
       form.append('file', file);
 
       const response = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,thumbnailLink,webContentLink',
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,thumbnailLink,webContentLink,appProperties',
         {
           method: 'POST',
           headers: {
@@ -141,13 +219,16 @@ export class GoogleDriveService {
 
   async deleteFile(fileId: string): Promise<boolean> {
     try {
-      await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-        },
-      });
-      return true;
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+          },
+        }
+      );
+      return response.ok;
     } catch (error) {
       console.error('Error deleting file:', error);
       return false;
@@ -155,26 +236,29 @@ export class GoogleDriveService {
   }
 
   async saveTasks(tasks: any[]): Promise<boolean> {
+    const fileId = await this.findOrCreateTaskDataFile();
+    if (!fileId) return false;
+
     try {
-      const fileId = await this.findOrCreateTaskFile();
-      if (!fileId) return false;
+      // Store complete task data in Google Drive
+      const driveData = tasks.map(task => ({
+        ...task,
+        lastModified: Date.now(),
+      }));
 
-      const encryptedData = this.encrypt(JSON.stringify(tasks));
-      const metadata = {
-        mimeType: 'application/json',
-      };
-
+      const encryptedData = this.encrypt(JSON.stringify(driveData));
+      
       const form = new FormData();
       form.append(
         'metadata',
-        new Blob([JSON.stringify(metadata)], { type: 'application/json' })
+        new Blob([JSON.stringify({ mimeType: 'application/json' })], { type: 'application/json' })
       );
       form.append(
         'file',
         new Blob([encryptedData], { type: 'application/json' })
       );
 
-      await fetch(
+      const response = await fetch(
         `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`,
         {
           method: 'PATCH',
@@ -185,7 +269,13 @@ export class GoogleDriveService {
         }
       );
 
-      return true;
+      if (response.ok) {
+        // Update cache after successful save
+        taskCache.setTasks(tasks);
+        this.lastSyncTimestamp = Date.now();
+      }
+
+      return response.ok;
     } catch (error) {
       console.error('Error saving tasks:', error);
       return false;
@@ -193,10 +283,16 @@ export class GoogleDriveService {
   }
 
   async loadTasks(): Promise<any[]> {
-    try {
-      const fileId = await this.findOrCreateTaskFile();
-      if (!fileId) return [];
+    // Check cache first
+    const cachedTasks = taskCache.getTasks();
+    if (cachedTasks && !this.shouldSync()) {
+      return cachedTasks;
+    }
 
+    const fileId = await this.findOrCreateTaskDataFile();
+    if (!fileId) return [];
+
+    try {
       const response = await fetch(
         `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
         {
@@ -206,12 +302,33 @@ export class GoogleDriveService {
         }
       );
 
+      if (!response.ok) {
+        throw new Error('Failed to load tasks from Google Drive');
+      }
+
       const encryptedData = await response.text();
       const decryptedData = this.decrypt(encryptedData);
-      return JSON.parse(decryptedData);
+      const tasks = JSON.parse(decryptedData);
+
+      // Convert date strings back to Date objects
+      const processedTasks = tasks.map((task: any) => ({
+        ...task,
+        dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
+        recurrence: task.recurrence ? {
+          ...task.recurrence,
+          endDate: task.recurrence.endDate ? new Date(task.recurrence.endDate) : undefined
+        } : undefined
+      }));
+
+      // Update cache with fresh data
+      taskCache.setTasks(processedTasks);
+      this.lastSyncTimestamp = Date.now();
+
+      return processedTasks;
     } catch (error) {
       console.error('Error loading tasks:', error);
-      return [];
+      // Return cached tasks if available, even if expired
+      return cachedTasks || [];
     }
   }
 }

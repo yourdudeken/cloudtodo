@@ -3,7 +3,6 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { config } from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
 import schedule from 'node-schedule';
 import { GoogleDriveService } from './google-drive.js';
 import { emailNotificationService } from './notification-service.js';
@@ -21,11 +20,6 @@ const io = new Server(httpServer, {
 
 app.use(cors());
 app.use(express.json());
-
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
-);
 
 // Store active user connections
 const activeUsers = new Map();
@@ -58,16 +52,10 @@ const scheduleReminder = async (task, userId) => {
       });
     }
 
-    // Get user email from Supabase
-    const { data: userData } = await supabase
-      .from('users')
-      .select('email')
-      .eq('id', userId)
-      .single();
-
-    if (userData?.email) {
-      // Send email notification
-      await emailNotificationService.sendTaskReminder(userData.email, task);
+    // Send email notification
+    const userEmail = task.collaborators?.find(c => c.userId === userId)?.userEmail;
+    if (userEmail) {
+      await emailNotificationService.sendTaskReminder(userEmail, task);
     }
   });
 };
@@ -125,21 +113,16 @@ io.on('connection', (socket) => {
   // Handle chat messages
   socket.on('chatMessage', async ({ taskId, message, userId }) => {
     try {
-      const { data, error } = await supabase
-        .from('task_messages')
-        .insert([
-          {
-            task_id: taskId,
-            user_id: userId,
-            message: message
-          }
-        ])
-        .select();
-
-      if (error) throw error;
+      const newMessage = {
+        id: crypto.randomUUID(),
+        taskId,
+        userId,
+        message,
+        created_at: new Date().toISOString()
+      };
 
       // Broadcast message to all users in the task's room
-      io.to(`task-${taskId}`).emit('newMessage', data[0]);
+      io.to(`task-${taskId}`).emit('newMessage', newMessage);
     } catch (error) {
       console.error('Chat error:', error);
     }

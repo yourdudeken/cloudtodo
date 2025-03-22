@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, Pin, Star, Calendar, Clock, Kanban as LayoutKanban, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
+import { LayoutDashboard, Pin, Star, Calendar, Clock, Kanban as LayoutKanban, ChevronLeft, ChevronRight, Menu, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AddTaskDialog } from './add-task-dialog';
+import { CollaborateDialog } from './collaborate-dialog';
 import { useLocation } from '@/lib/hooks';
 import { UserProfile } from './user-profile';
 
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showCollaborateDialog, setShowCollaborateDialog] = useState(false);
   const { pathname } = useLocation();
 
   const navItems = [
@@ -17,11 +19,16 @@ export function Sidebar() {
     { icon: Calendar, label: 'Calendar', href: '/calendar' },
     { icon: Clock, label: 'Recent', href: '/recent' },
     { icon: LayoutKanban, label: 'Kanban', href: '/kanban' },
+    { icon: Users, label: 'Collaborate', onClick: () => setShowCollaborateDialog(true) },
   ];
 
-  const handleNavigation = (href: string) => {
-    window.history.pushState({}, '', href);
-    window.dispatchEvent(new PopStateEvent('popstate'));
+  const handleNavigation = (item: typeof navItems[0]) => {
+    if (item.onClick) {
+      item.onClick();
+    } else if (item.href) {
+      window.history.pushState({}, '', item.href);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
   };
 
   return (
@@ -40,7 +47,7 @@ export function Sidebar() {
         className={cn(
           "bg-white border-r border-gray-200 h-screen transition-all duration-300 ease-in-out flex flex-col",
           isCollapsed ? "w-[60px]" : "w-[240px]",
-          "hidden lg:flex" // Hide on mobile by default
+          "hidden lg:flex"
         )}
       >
         {/* User Profile */}
@@ -62,18 +69,21 @@ export function Sidebar() {
           </Button>
         </div>
 
-        {!isCollapsed && <AddTaskDialog />}
+        {/* Add Task Button - Centered */}
+        <div className="flex justify-center px-2 py-4">
+          <AddTaskDialog />
+        </div>
 
         <nav className="p-2 space-y-1">
           {navItems.map((item) => (
             <Button
-              key={item.href}
+              key={item.href || item.label}
               variant={pathname === item.href ? "secondary" : "ghost"}
               className={cn(
                 "w-full justify-start gap-3 px-3",
                 isCollapsed && "justify-center px-2"
               )}
-              onClick={() => handleNavigation(item.href)}
+              onClick={() => handleNavigation(item)}
             >
               <item.icon className="h-5 w-5" />
               {!isCollapsed && <span>{item.label}</span>}
@@ -103,16 +113,19 @@ export function Sidebar() {
           </Button>
         </div>
 
-        <AddTaskDialog />
+        {/* Add Task Button - Centered */}
+        <div className="flex justify-center px-2 py-4">
+          <AddTaskDialog />
+        </div>
 
         <nav className="p-2 space-y-1">
           {navItems.map((item) => (
             <Button
-              key={item.href}
+              key={item.href || item.label}
               variant={pathname === item.href ? "secondary" : "ghost"}
               className="w-full justify-start gap-3 px-3"
               onClick={() => {
-                handleNavigation(item.href);
+                handleNavigation(item);
                 setIsCollapsed(true);
               }}
             >
@@ -122,6 +135,10 @@ export function Sidebar() {
           ))}
         </nav>
       </aside>
+
+      {showCollaborateDialog && (
+        <CollaborateDialog onClose={() => setShowCollaborateDialog(false)} />
+      )}
     </div>
   );
 }

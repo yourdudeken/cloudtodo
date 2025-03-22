@@ -3,11 +3,13 @@ import { useTaskStore } from '@/store/tasks';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, startOfToday, eachDayOfInterval, startOfMonth, endOfMonth, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { TaskDetail } from './task-detail';
 
 export function CalendarView() {
   const tasks = useTaskStore((state) => state.tasks);
   const [selectedDate, setSelectedDate] = React.useState(startOfToday());
   const [currentMonth, setCurrentMonth] = React.useState(format(selectedDate, 'MMM-yyyy'));
+  const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
   const firstDayCurrentMonth = startOfMonth(selectedDate);
 
   const days = eachDayOfInterval({
@@ -104,9 +106,10 @@ export function CalendarView() {
                 {firstTask && (
                   <div
                     className={cn(
-                      'text-xs p-1 rounded truncate',
+                      'text-xs p-1 rounded truncate cursor-pointer hover:ring-2 transition-all',
                       priorityColors[firstTask.priority]
                     )}
+                    onClick={() => setSelectedTaskId(firstTask.id)}
                   >
                     {firstTask.title}
                   </div>
@@ -133,9 +136,10 @@ export function CalendarView() {
               <div
                 key={task.id}
                 className={cn(
-                  'p-3 rounded-lg',
+                  'p-3 rounded-lg cursor-pointer hover:ring-2 transition-all',
                   priorityColors[task.priority]
                 )}
+                onClick={() => setSelectedTaskId(task.id)}
               >
                 <div className="font-medium">{task.title}</div>
                 {task.description && (
@@ -145,6 +149,14 @@ export function CalendarView() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Task Detail Dialog */}
+      {selectedTaskId && (
+        <TaskDetail
+          taskId={selectedTaskId}
+          onClose={() => setSelectedTaskId(null)}
+        />
       )}
     </div>
   );
