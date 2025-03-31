@@ -7,9 +7,10 @@ import { format } from 'date-fns';
 
 interface KanbanTaskProps {
   task: Task;
+  onTaskClick: (taskId: string) => void; // Add prop
 }
 
-export function KanbanTask({ task }: KanbanTaskProps) {
+export function KanbanTask({ task, onTaskClick }: KanbanTaskProps) { // Destructure prop
   const {
     attributes,
     listeners,
@@ -39,14 +40,18 @@ export function KanbanTask({ task }: KanbanTaskProps) {
       {...listeners}
       className={`
         bg-white rounded-lg border p-3 shadow-sm
-        hover:shadow-md transition-shadow cursor-move
+        hover:shadow-md transition-shadow cursor-move group
         ${isDragging ? 'opacity-50' : ''}
       `}
     >
-      <div className="flex items-start gap-2">
-        <div className={`w-2 h-2 rounded-full mt-2 ${priorityColors[task.priority]}`} />
+      {/* Make inner content clickable */}
+      <div 
+        className="flex items-start gap-2 cursor-pointer" 
+        onClick={() => onTaskClick(task.id)} // Add onClick here
+      >
+        <div className={`w-2 h-2 rounded-full mt-2 ${priorityColors[task.priority]} flex-shrink-0`} />
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-gray-900 truncate">{task.title}</h3>
+          <h3 className="font-medium text-gray-900 truncate group-hover:text-blue-600">{task.title}</h3> {/* Change color on hover */}
           {task.description && (
             <p className="text-sm text-gray-500 mt-1 line-clamp-2">{task.description}</p>
           )}

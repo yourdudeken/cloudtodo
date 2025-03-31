@@ -18,7 +18,11 @@ import { KanbanTask } from './kanban-task';
 
 type TaskStatus = 'todo' | 'in-progress' | 'completed';
 
-export function KanbanBoard() {
+interface KanbanBoardProps {
+  onTaskClick: (taskId: string) => void; // Add prop type
+}
+
+export function KanbanBoard({ onTaskClick }: KanbanBoardProps) { // Destructure prop
   const tasks = useTaskStore((state) => state.tasks);
   const updateTask = useTaskStore((state) => state.updateTask);
   const [activeId, setActiveId] = React.useState<string | null>(null);
@@ -107,25 +111,29 @@ export function KanbanBoard() {
             title="To Do"
             tasks={getTasksByStatus('todo')}
             icon="circle"
+            onTaskClick={onTaskClick} // Pass prop
           />
           <KanbanColumn
             id="in-progress"
             title="In Progress"
             tasks={getTasksByStatus('in-progress')}
             icon="clock"
+            onTaskClick={onTaskClick} // Pass prop
           />
           <KanbanColumn
             id="completed"
             title="Completed"
             tasks={getTasksByStatus('completed')}
             icon="check-circle"
+            onTaskClick={onTaskClick} // Pass prop
           />
         </div>
 
+        {/* Pass onTaskClick to the DragOverlay task as well */}
         <DragOverlay>
           {activeId && activeTask ? (
             <div className="bg-white shadow-lg rounded-lg border p-4">
-              <KanbanTask task={activeTask} />
+              <KanbanTask task={activeTask} onTaskClick={onTaskClick} /> 
             </div>
           ) : null}
         </DragOverlay>

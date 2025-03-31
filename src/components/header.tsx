@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react'; // Import useState and useEffect
 import { useAuthStore } from '@/store/auth';
 import { useNotificationStore } from '@/store/notifications';
 import { useSettingsStore } from '@/store/settings';
 import { Button } from './ui/button';
-import { Bell, Settings, HelpCircle, Sun, Moon, Monitor, Check, X, Volume2, Mail, BellRing } from 'lucide-react';
+import { Bell, Settings, HelpCircle, Sun, Moon, Monitor, Check, X, Volume2, Mail, BellRing, BellOff } from 'lucide-react'; // Added BellOff, BellRing
 import * as Popover from '@radix-ui/react-popover';
 import * as Select from '@radix-ui/react-select';
 import { format } from 'date-fns';
+import { UserProfile } from './user-profile'; // Import UserProfile
+import { requestNotificationPermission, syncBrowserNotifications } from '@/lib/browser-notifications'; // Import notification utilities
+import { useTaskStore } from '@/store/tasks'; // Import useTaskStore
 
 export function Header() {
   const { user } = useAuthStore();
@@ -47,7 +50,7 @@ export function Header() {
           </h1>
         </div>
 
-        {/* Right Side Actions */}
+        {/* Right Side Actions - UserProfile moved to the end */}
         <div className="flex items-center gap-4">
           {/* Help Button */}
           <Popover.Root>
@@ -386,6 +389,8 @@ export function Header() {
               </Popover.Content>
             </Popover.Portal>
           </Popover.Root>
+
+          <UserProfile /> {/* UserProfile moved to the end */}
         </div>
       </div>
     </header>

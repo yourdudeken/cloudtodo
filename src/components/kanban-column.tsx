@@ -6,22 +6,26 @@ import {
 } from '@dnd-kit/sortable';
 import { KanbanTask } from './kanban-task';
 import { Task } from '@/store/tasks';
-import { Circle, Clock, CheckCircle } from 'lucide-react';
+import { Circle, Clock, CheckCircle } from 'lucide-react'; // Corrected import CheckCircle2 -> CheckCircle
 
+// Define props interface including onTaskClick
 interface KanbanColumnProps {
   id: string;
   title: string;
   tasks: Task[];
   icon: 'circle' | 'clock' | 'check-circle';
+  onTaskClick: (taskId: string) => void; // Add prop type
 }
 
-export function KanbanColumn({ id, title, tasks, icon }: KanbanColumnProps) {
+// Destructure props including onTaskClick
+export function KanbanColumn({ id, title, tasks, icon, onTaskClick }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({ id });
 
+  // Corrected Icon mapping based on actual imports
   const Icon = {
     circle: Circle,
     clock: Clock,
-    'check-circle': CheckCircle,
+    'check-circle': CheckCircle, 
   }[icon];
 
   return (
@@ -43,7 +47,8 @@ export function KanbanColumn({ id, title, tasks, icon }: KanbanColumnProps) {
       >
         <div className="space-y-3">
           {tasks.map((task) => (
-            <KanbanTask key={task.id} task={task} />
+            // Pass onTaskClick down to KanbanTask
+            <KanbanTask key={task.id} task={task} onTaskClick={onTaskClick} /> 
           ))}
         </div>
       </SortableContext>

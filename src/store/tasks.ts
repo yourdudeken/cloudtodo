@@ -1,9 +1,14 @@
 import { create } from 'zustand';
 import { useAuthStore } from './auth';
 import { socketService } from '@/lib/socket';
-import { FileAttachment } from '@/lib/google-drive';
+import { FileAttachment, TaskComment } from '@/lib/google-drive'; // Import TaskComment
 import { useNotificationStore } from './notifications';
 import { taskCache } from '@/lib/cache';
+import { 
+  scheduleTaskNotification, 
+  cancelTaskNotification, 
+  rescheduleTaskNotification 
+} from '@/lib/browser-notifications'; // Import notification scheduling functions
 
 export interface Task {
   id: string;
@@ -33,20 +38,17 @@ export interface Task {
     role: 'viewer' | 'editor';
     createdAt: string;
   }[];
-  comments?: {
-    id: string;
-    userId: string;
-    userEmail: string;
-    content: string;
-    createdAt: string;
-  }[];
+  comments?: TaskComment[]; // Use TaskComment type if defined elsewhere, or keep inline structure
+  taskType: 'personal' | 'collaborative'; // Added task type
+  createdAt: number; // Added creation timestamp (Unix milliseconds)
+  // userId?: string; // Removed userId field as it's not used for notifications anymore
 }
 
 interface TaskState {
   tasks: Task[];
   categories: string[];
   tags: string[];
-  addTask: (task: Omit<Task, 'id'>) => Promise<void>;
+  addTask: (task: Omit<Task, 'id' | 'createdAt'>) => Promise<void>; // Omit createdAt as well
   toggleTask: (id: string) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   updateTask: (id: string, task: Partial<Task>) => Promise<void>;
@@ -65,63 +67,67 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   categories: ['Work', 'Personal', 'Shopping', 'Health', 'Education'],
   tags: ['Important', 'Urgent', 'In Progress', 'Blocked', 'Review'],
 
-  addTask: async (task) => {
-    const newTask = { 
-      ...task, 
-      id: crypto.randomUUID(),
-      collaborators: [],
-      comments: []
+  // addTask now only sends data to the server. The 'taskAdded' socket listener handles adding to state.
+  addTask: async (taskData) => {
+    // Prepare data to send (without client-generated ID or createdAt)
+    const dataToSend = {
+      ...taskData,
+      // Ensure required fields have defaults if not provided by the form/caller
+      completed: taskData.completed ?? false,
+      priority: taskData.priority ?? 4,
+      projectId: taskData.projectId || 'inbox', // Ensure projectId exists
+      // Server will add id, createdAt, collaborators, comments, attachments etc.
     };
-    
+
     try {
-      set((state) => ({ tasks: [...state.tasks, newTask] }));
-      await get().syncWithDrive();
-      socketService.updateTask(newTask);
+      // Emit event to server with the core task data
+      console.log('[store/addTask] Emitting addTask event with data:', dataToSend);
+      socketService.addTask(dataToSend);
 
-      // Update cache
-      taskCache.setTasks(get().tasks);
-
+      // Notification can remain, or be triggered by the 'taskAdded' listener later
       useNotificationStore.getState().addNotification({
-        type: 'success',
-        message: 'Task added successfully'
+        type: 'info', // Changed to info as success is confirmed by server event
+        message: 'Adding task...'
       });
-    } catch (error) {
-      console.error('Error adding task:', error);
-      set((state) => ({
-        tasks: state.tasks.filter(t => t.id !== newTask.id)
-      }));
-      
+    } catch (error) { // Catch potential synchronous errors in socketService.addTask if any
+      console.error('Error emitting addTask event:', error);
+      // No state to revert as optimistic update was removed
       useNotificationStore.getState().addNotification({
         type: 'error',
         message: 'Failed to add task'
-      });
-    }
-  },
+       });
+       // Schedule notification after successful add (or rely on socket listener)
+       // Note: Scheduling might be better handled in the 'taskAdded' socket listener 
+       // after the task with its final ID and details is added to the store.
+       // If scheduling here, ensure the taskData includes enough info (dueDate, reminder).
+       // scheduleTaskNotification({ id: /* Need ID from server */, ...dataToSend }); 
+     }
+   },
 
-  toggleTask: async (id) => {
+   toggleTask: async (id) => {
+     const originalTasks = get().tasks;
+     const task = originalTasks.find(t => t.id === id);
+    if (!task) return;
+
+    const updatedTask = { ...task, completed: !task.completed };
+
     try {
-      set((state) => ({
-        tasks: state.tasks.map((task) =>
-          task.id === id ? { ...task, completed: !task.completed } : task
-        ),
-      }));
-      
-      // Update cache
+      // Optimistic update
+      set({ tasks: originalTasks.map(t => t.id === id ? updatedTask : t) });
       taskCache.setTasks(get().tasks);
-      
-      await get().syncWithDrive();
-      const task = get().tasks.find(t => t.id === id);
-      if (task) {
-        socketService.updateTask(task);
-      }
-    } catch (error) {
-      console.error('Error toggling task:', error);
-      set((state) => ({
-        tasks: state.tasks.map(task =>
-          task.id === id ? { ...task, completed: !task.completed } : task
-        )
-      }));
-      
+
+       // Emit update to server
+       socketService.updateTask(updatedTask);
+
+       // Reschedule notification based on new completion status
+       rescheduleTaskNotification(updatedTask);
+
+     } catch (error) { // This catch might not be effective for socket errors
+       console.error('Error toggling task status via socket:', error);
+      // Revert optimistic update
+      set({ tasks: originalTasks });
+      taskCache.setTasks(originalTasks);
+
       useNotificationStore.getState().addNotification({
         type: 'error',
         message: 'Failed to update task status'
@@ -130,22 +136,35 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   deleteTask: async (id) => {
-    const deletedTask = get().tasks.find(t => t.id === id);
-    
+    const originalTasks = get().tasks;
+    const taskToDelete = originalTasks.find(t => t.id === id);
+    if (!taskToDelete) return;
+
     try {
-      set((state) => ({
-        tasks: state.tasks.filter((task) => task.id !== id)
-      }));
+      // Optimistic update (remove immediately from UI)
+      // Note: The socket listener for 'taskDeleted' will also perform this removal.
+      // Depending on desired UX, you might remove this optimistic update and rely solely on the listener.
+      set({ tasks: originalTasks.filter(task => task.id !== id) });
       taskCache.setTasks(get().tasks);
-      await get().syncWithDrive();
-    } catch (error) {
-      console.error('Error deleting task:', error);
-      if (deletedTask) {
-        set((state) => ({
-          tasks: [...state.tasks, deletedTask]
-        }));
-      }
-      
+
+       // Emit delete event to server
+       socketService.deleteTask(id);
+
+       // Cancel any scheduled notification for the deleted task
+       cancelTaskNotification(id);
+
+       // No need to call syncWithDrive here
+       useNotificationStore.getState().addNotification({
+        type: 'success', // Or remove notification if handled by listener
+        message: 'Task deleted'
+      });
+
+    } catch (error) { // This catch might not be effective for socket errors
+      console.error('Error deleting task via socket:', error);
+      // Revert optimistic update if needed (though listener might handle it)
+      set({ tasks: originalTasks });
+      taskCache.setTasks(originalTasks);
+
       useNotificationStore.getState().addNotification({
         type: 'error',
         message: 'Failed to delete task'
@@ -154,29 +173,29 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   updateTask: async (id, updatedFields) => {
-    const oldTask = get().tasks.find(t => t.id === id);
-    
+    const originalTasks = get().tasks;
+    const taskToUpdate = originalTasks.find(t => t.id === id);
+    if (!taskToUpdate) return;
+
+    const updatedTask = { ...taskToUpdate, ...updatedFields };
+
     try {
-      set((state) => ({
-        tasks: state.tasks.map((task) =>
-          task.id === id ? { ...task, ...updatedFields } : task
-        ),
-      }));
-      
+      // Optimistic update
+      set({ tasks: originalTasks.map(t => t.id === id ? updatedTask : t) });
       taskCache.setTasks(get().tasks);
-      await get().syncWithDrive();
-      const task = get().tasks.find(t => t.id === id);
-      if (task) {
-        socketService.updateTask(task);
-      }
-    } catch (error) {
-      console.error('Error updating task:', error);
-      if (oldTask) {
-        set((state) => ({
-          tasks: state.tasks.map(t => t.id === id ? oldTask : t)
-        }));
-      }
-      
+
+       // Emit update to server
+       socketService.updateTask(updatedTask);
+
+       // Reschedule notification based on updated details
+       rescheduleTaskNotification(updatedTask);
+
+     } catch (error) { // This catch might not be effective for socket errors
+       console.error('Error updating task via socket:', error);
+      // Revert optimistic update
+      set({ tasks: originalTasks });
+      taskCache.setTasks(originalTasks);
+
       useNotificationStore.getState().addNotification({
         type: 'error',
         message: 'Failed to update task'
@@ -184,30 +203,53 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
 
+  // addComment now updates the task locally and emits an updateTask event
   addComment: async (taskId: string, content: string) => {
     const user = useAuthStore.getState().user;
-    if (!user) return;
+    // Require login to comment for now
+    if (!user) {
+       console.error("Cannot add comment: User not logged in.");
+       useNotificationStore.getState().addNotification({ type: 'error', message: 'You must be logged in to comment.' });
+       return;
+    }
 
-    const comment = {
+    const originalTasks = get().tasks;
+    const taskToUpdate = originalTasks.find(t => t.id === taskId);
+    if (!taskToUpdate) {
+      console.error("Cannot add comment: Task not found.");
+      useNotificationStore.getState().addNotification({ type: 'error', message: 'Task not found.' });
+      return;
+    }
+
+    // Ensure TaskComment type includes necessary fields or adjust as needed
+    const newComment: TaskComment = {
       id: crypto.randomUUID(),
-      userId: user.id,
-      userEmail: user.email,
       content,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      userId: user.id, // Assuming user object has an id
+      userEmail: user.email // Assuming user object has an email
+    };
+
+    const updatedTask = {
+      ...taskToUpdate,
+      comments: [...(taskToUpdate.comments || []), newComment] // Add new comment to array
     };
 
     try {
-      set((state) => ({
-        tasks: state.tasks.map((task) =>
-          task.id === taskId
-            ? { ...task, comments: [...(task.comments || []), comment] }
-            : task
-        ),
-      }));
+      // Optimistic update
+      set({ tasks: originalTasks.map(t => t.id === taskId ? updatedTask : t) });
       taskCache.setTasks(get().tasks);
-      await get().syncWithDrive();
-    } catch (error) {
-      console.error('Error adding comment:', error);
+
+      // Emit updateTask event to server with the full updated task
+      socketService.updateTask(updatedTask);
+
+      useNotificationStore.getState().addNotification({ type: 'success', message: 'Comment added' });
+
+    } catch (error) { // Catch potential synchronous errors
+      console.error('Error adding comment via socket:', error);
+      // Revert optimistic update
+      set({ tasks: originalTasks });
+      taskCache.setTasks(originalTasks);
       useNotificationStore.getState().addNotification({
         type: 'error',
         message: 'Failed to add comment'
@@ -215,27 +257,38 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
 
+  // Collaborator/Attachment changes also need to emit task updates
   addCollaborator: async (taskId: string, userEmail: string, role: 'viewer' | 'editor') => {
+    const originalTasks = get().tasks;
+    const taskToUpdate = originalTasks.find(t => t.id === taskId);
+    if (!taskToUpdate) return;
+
     const collaborator = {
       id: crypto.randomUUID(),
-      userId: crypto.randomUUID(), // In a real app, you'd get this from the user's account
+      userId: crypto.randomUUID(), // Placeholder ID
       userEmail,
       role,
       createdAt: new Date().toISOString()
     };
+    const updatedTask = {
+      ...taskToUpdate,
+      collaborators: [...(taskToUpdate.collaborators || []), collaborator]
+    };
 
     try {
-      set((state) => ({
-        tasks: state.tasks.map((task) =>
-          task.id === taskId
-            ? { ...task, collaborators: [...(task.collaborators || []), collaborator] }
-            : task
-        ),
-      }));
+      // Optimistic update
+      set({ tasks: originalTasks.map(t => t.id === taskId ? updatedTask : t) });
       taskCache.setTasks(get().tasks);
-      await get().syncWithDrive();
-    } catch (error) {
-      console.error('Error adding collaborator:', error);
+
+      // Emit update to server
+      socketService.updateTask(updatedTask);
+
+    } catch (error) { // This catch might not be effective for socket errors
+      console.error('Error adding collaborator via socket:', error);
+      // Revert optimistic update
+      set({ tasks: originalTasks });
+      taskCache.setTasks(originalTasks);
+
       useNotificationStore.getState().addNotification({
         type: 'error',
         message: 'Failed to add collaborator'
@@ -244,23 +297,29 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   removeCollaborator: async (taskId: string, collaboratorId: string) => {
+    const originalTasks = get().tasks;
+    const taskToUpdate = originalTasks.find(t => t.id === taskId);
+    if (!taskToUpdate) return;
+
+     const updatedTask = {
+       ...taskToUpdate,
+       collaborators: (taskToUpdate.collaborators || []).filter(c => c.id !== collaboratorId)
+     };
+
     try {
-      set((state) => ({
-        tasks: state.tasks.map((task) =>
-          task.id === taskId
-            ? {
-                ...task,
-                collaborators: (task.collaborators || []).filter(
-                  (c) => c.id !== collaboratorId
-                ),
-              }
-            : task
-        ),
-      }));
+      // Optimistic update
+      set({ tasks: originalTasks.map(t => t.id === taskId ? updatedTask : t) });
       taskCache.setTasks(get().tasks);
-      await get().syncWithDrive();
-    } catch (error) {
-      console.error('Error removing collaborator:', error);
+
+      // Emit update to server
+      socketService.updateTask(updatedTask);
+
+    } catch (error) { // This catch might not be effective for socket errors
+      console.error('Error removing collaborator via socket:', error);
+      // Revert optimistic update
+      set({ tasks: originalTasks });
+      taskCache.setTasks(originalTasks);
+
       useNotificationStore.getState().addNotification({
         type: 'error',
         message: 'Failed to remove collaborator'
@@ -278,46 +337,46 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       tags: [...new Set([...state.tags, tag])],
     })),
 
+  // syncWithDrive is no longer needed as primary mechanism
   syncWithDrive: async () => {
-    const googleDrive = useAuthStore.getState().googleDrive;
-    if (!googleDrive) return;
-
-    try {
-      const tasks = get().tasks;
-      await googleDrive.saveTasks(tasks);
-      taskCache.setTasks(tasks); // Update cache after successful sync
-    } catch (error) {
-      console.error('Error syncing with Drive:', error);
-      useNotificationStore.getState().addNotification({
-        type: 'error',
-        message: 'Failed to sync with Google Drive'
-      });
-      throw error;
-    }
+     console.warn("syncWithDrive called, but task synchronization is now handled by Socket.IO events.");
+     // Optionally, could perform a manual fetch/sync if needed for recovery,
+     // but primary updates should go through socketService.
+     // Example: Trigger initial sync on demand?
+     // const auth = useAuthStore.getState();
+     // if (auth.isAuthenticated && auth.user && auth.accessToken) {
+     //   socketService.initialize(); // Re-emit authenticate to trigger sync
+     // }
   },
 
   uploadAttachment: async (taskId: string, file: File) => {
-    const googleDrive = useAuthStore.getState().googleDrive;
+    const googleDrive = useAuthStore.getState().googleDrive; // Still need drive service for file ops
     if (!googleDrive) return;
 
+    const originalTasks = get().tasks;
+    const taskToUpdate = originalTasks.find(t => t.id === taskId);
+    if (!taskToUpdate) return;
+
     try {
-      const attachment = await googleDrive.uploadFile(file, taskId);
+      const attachment = await googleDrive.uploadFile(file, taskId); // Direct Drive API call for file
       if (attachment) {
-        set((state) => ({
-          tasks: state.tasks.map((task) =>
-            task.id === taskId
-              ? {
-                  ...task,
-                  attachments: [...(task.attachments || []), attachment],
-                }
-              : task
-          ),
-        }));
+        const updatedTask = {
+          ...taskToUpdate,
+          attachments: [...(taskToUpdate.attachments || []), attachment]
+        };
+
+        // Optimistic update
+        set({ tasks: originalTasks.map(t => t.id === taskId ? updatedTask : t) });
         taskCache.setTasks(get().tasks);
-        await get().syncWithDrive();
+
+        // Emit task update to server
+        socketService.updateTask(updatedTask);
+      } else {
+         throw new Error("File upload failed in Google Drive service.");
       }
     } catch (error) {
       console.error('Error uploading attachment:', error);
+       // No state reversal needed here as the file upload itself failed before state change
       useNotificationStore.getState().addNotification({
         type: 'error',
         message: 'Failed to upload file'
@@ -326,29 +385,33 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   deleteAttachment: async (taskId: string, attachmentId: string) => {
-    const googleDrive = useAuthStore.getState().googleDrive;
+    const googleDrive = useAuthStore.getState().googleDrive; // Still need drive service for file ops
     if (!googleDrive) return;
 
+    const originalTasks = get().tasks;
+    const taskToUpdate = originalTasks.find(t => t.id === taskId);
+    if (!taskToUpdate) return;
+
     try {
-      const success = await googleDrive.deleteFile(attachmentId);
+      const success = await googleDrive.deleteFile(attachmentId); // Direct Drive API call for file
       if (success) {
-        set((state) => ({
-          tasks: state.tasks.map((task) =>
-            task.id === taskId
-              ? {
-                  ...task,
-                  attachments: (task.attachments || []).filter(
-                    (a) => a.id !== attachmentId
-                  ),
-                }
-              : task
-          ),
-        }));
+         const updatedTask = {
+           ...taskToUpdate,
+           attachments: (taskToUpdate.attachments || []).filter(a => a.id !== attachmentId)
+         };
+
+        // Optimistic update
+        set({ tasks: originalTasks.map(t => t.id === taskId ? updatedTask : t) });
         taskCache.setTasks(get().tasks);
-        await get().syncWithDrive();
+
+        // Emit task update to server
+        socketService.updateTask(updatedTask);
+      } else {
+         throw new Error("File deletion failed in Google Drive service.");
       }
     } catch (error) {
       console.error('Error deleting attachment:', error);
+       // No state reversal needed here as the file deletion itself failed before state change
       useNotificationStore.getState().addNotification({
         type: 'error',
         message: 'Failed to delete attachment'

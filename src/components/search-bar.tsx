@@ -1,16 +1,12 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Search, Sparkles, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTaskStore } from '@/store/tasks';
-import { AISuggestionsService } from '@/lib/ai-suggestions';
 import { TaskDetail } from './task-detail';
 
 export function SearchBar() {
   const [query, setQuery] = React.useState('');
-  const [isSearching, setIsSearching] = React.useState(false);
-  const [showAIResults, setShowAIResults] = React.useState(false);
-  const [aiSuggestions, setAISuggestions] = React.useState<string[]>([]);
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
   const tasks = useTaskStore((state) => state.tasks);
 
@@ -23,18 +19,6 @@ export function SearchBar() {
       return searchTerms.every(term => searchText.includes(term));
     });
   }, [query, tasks]);
-
-  const handleAISearch = async () => {
-    setIsSearching(true);
-    try {
-      const completion = await AISuggestionsService.searchTasks(query, tasks);
-      setAISuggestions(completion);
-      setShowAIResults(true);
-    } catch (error) {
-      console.error('Error with AI search:', error);
-    }
-    setIsSearching(false);
-  };
 
   return (
     <div className="relative w-full max-w-2xl mx-auto mb-8">
@@ -52,19 +36,20 @@ export function SearchBar() {
             <button
               onClick={() => setQuery('')}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              aria-label="Clear search"
             >
               <X className="h-4 w-4" />
             </button>
           )}
         </div>
-        <Button
-          onClick={handleAISearch}
-          disabled={!query || isSearching}
-          className="gap-2"
-        >
-          <Sparkles className="h-4 w-4" />
-          AI Search
-        </Button>
+        {/* The search icon is already present in the input field */}
+        {/* If a separate button is desired, it could be added here */}
+        {/* Example: 
+        <Button variant="ghost" size="icon" disabled={!query}>
+          <Search className="h-4 w-4" />
+        </Button> 
+        */}
+        {/* For now, removing the AI button simplifies the UI as requested */}
       </div>
 
       {/* Search Results */}
@@ -86,34 +71,6 @@ export function SearchBar() {
           ))}
         </div>
       )}
-
-      {/* AI Results Dialog */}
-      <Dialog.Root open={showAIResults} onOpenChange={setShowAIResults}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-          <Dialog.Content className="fixed left-[50%] top-[50%] max-h-[85vh] w-[90vw] max-w-[500px] translate-x-[-50%] translate-y-[-50%] rounded-lg bg-white p-6 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-blue-500" />
-                AI Search Results
-              </h2>
-              <Dialog.Close asChild>
-                <Button variant="ghost" size="icon">
-                  <X className="h-4 w-4" />
-                </Button>
-              </Dialog.Close>
-            </div>
-            
-            <div className="space-y-4">
-              {aiSuggestions.map((suggestion, index) => (
-                <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                  {suggestion}
-                </div>
-              ))}
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
 
       {/* Task Detail Dialog */}
       {selectedTaskId && (

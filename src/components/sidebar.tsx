@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, Pin, Star, Calendar, Clock, Kanban as LayoutKanban, ChevronLeft, ChevronRight, Menu, Users } from 'lucide-react';
+import { LayoutDashboard, Pin, Star, Calendar, Clock, Kanban as LayoutKanban, ChevronLeft, ChevronRight, Menu, Users, Plus } from 'lucide-react'; // Re-added Plus
 import { cn } from '@/lib/utils';
 import { AddTaskDialog } from './add-task-dialog';
-import { CollaborateDialog } from './collaborate-dialog';
+import { CollaborateDialog } from './collaborate-dialog'; // Re-added CollaborateDialog import
 import { useLocation } from '@/lib/hooks';
 import { UserProfile } from './user-profile';
+import { useSidebarContext } from '@/lib/sidebar-context'; // Corrected context import path
+// Removed task store import as it's no longer needed here
 
 export function Sidebar() {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [showCollaborateDialog, setShowCollaborateDialog] = useState(false);
+  // Use context for isCollapsed state
+  const { isCollapsed, setIsCollapsed } = useSidebarContext(); 
+  // const [showCollaborateDialog, setShowCollaborateDialog] = useState(false); // Removed unused dialog state
   const { pathname } = useLocation();
 
   const navItems = [
@@ -19,13 +22,12 @@ export function Sidebar() {
     { icon: Calendar, label: 'Calendar', href: '/calendar' },
     { icon: Clock, label: 'Recent', href: '/recent' },
     { icon: LayoutKanban, label: 'Kanban', href: '/kanban' },
-    { icon: Users, label: 'Collaborate', onClick: () => setShowCollaborateDialog(true) },
+    { icon: Users, label: 'Collaborate', href: '/collaborate' },
   ];
 
-  const handleNavigation = (item: typeof navItems[0]) => {
-    if (item.onClick) {
-      item.onClick();
-    } else if (item.href) {
+  // Corrected type for handleNavigation - items only have href now
+  const handleNavigation = (item: { href: string; icon: React.ElementType; label: string }) => { 
+    if (item.href) {
       window.history.pushState({}, '', item.href);
       window.dispatchEvent(new PopStateEvent('popstate'));
     }
@@ -50,8 +52,7 @@ export function Sidebar() {
           "hidden lg:flex"
         )}
       >
-        {/* User Profile */}
-        {!isCollapsed && <UserProfile />}
+        {/* Removed User Profile */}
 
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           {!isCollapsed && <h2 className="text-xl font-semibold">My Tasks</h2>}
@@ -71,10 +72,22 @@ export function Sidebar() {
 
         {/* Add Task Button - Centered */}
         <div className="flex justify-center px-2 py-4">
-          <AddTaskDialog />
+          {/* Pass custom button as children */}
+          <AddTaskDialog>
+            <Button
+              className={cn(
+                "w-full justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white",
+                isCollapsed && "px-2" // Adjust padding when collapsed
+              )}
+              aria-label={isCollapsed ? "Add Task" : undefined} // Add aria-label when collapsed
+            >
+              <Plus className="h-5 w-5" />
+              {!isCollapsed && <span>Add Task</span>} {/* Conditionally render text */}
+            </Button>
+          </AddTaskDialog>
         </div>
 
-        <nav className="p-2 space-y-1">
+        <nav className="p-2 space-y-1"> {/* Removed flex-grow and overflow */}
           {navItems.map((item) => (
             <Button
               key={item.href || item.label}
@@ -99,8 +112,7 @@ export function Sidebar() {
           isCollapsed ? "-translate-x-full" : "translate-x-0"
         )}
       >
-        {/* User Profile */}
-        <UserProfile />
+        {/* Removed User Profile */}
 
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h2 className="text-xl font-semibold">My Tasks</h2>
@@ -136,9 +148,7 @@ export function Sidebar() {
         </nav>
       </aside>
 
-      {showCollaborateDialog && (
-        <CollaborateDialog onClose={() => setShowCollaborateDialog(false)} />
-      )}
+      {/* Removed CollaborateDialog rendering */}
     </div>
   );
 }

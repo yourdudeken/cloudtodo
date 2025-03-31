@@ -4,7 +4,7 @@ import { taskCache } from './cache';
 
 const TASKS_FOLDER_NAME = 'CloudTask';
 const TASK_DATA_FILE = 'tasks.json';
-const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY || 'your-secret-key';
+const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY
 
 export interface GoogleDriveConfig {
   accessToken: string;
@@ -164,9 +164,7 @@ export class GoogleDriveService {
     return bytes.toString(CryptoJS.enc.Utf8);
   }
 
-  private shouldSync(): boolean {
-    return Date.now() - this.lastSyncTimestamp >= this.SYNC_INTERVAL;
-  }
+  // Removed shouldSync as sync is now handled by socket events
 
   async uploadFile(file: File, taskId: string): Promise<FileAttachment | null> {
     const folderId = await this.findOrCreateTasksFolder();
@@ -235,100 +233,6 @@ export class GoogleDriveService {
     }
   }
 
-  async saveTasks(tasks: any[]): Promise<boolean> {
-    const fileId = await this.findOrCreateTaskDataFile();
-    if (!fileId) return false;
-
-    try {
-      // Store complete task data in Google Drive
-      const driveData = tasks.map(task => ({
-        ...task,
-        lastModified: Date.now(),
-      }));
-
-      const encryptedData = this.encrypt(JSON.stringify(driveData));
-      
-      const form = new FormData();
-      form.append(
-        'metadata',
-        new Blob([JSON.stringify({ mimeType: 'application/json' })], { type: 'application/json' })
-      );
-      form.append(
-        'file',
-        new Blob([encryptedData], { type: 'application/json' })
-      );
-
-      const response = await fetch(
-        `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`,
-        {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-          },
-          body: form,
-        }
-      );
-
-      if (response.ok) {
-        // Update cache after successful save
-        taskCache.setTasks(tasks);
-        this.lastSyncTimestamp = Date.now();
-      }
-
-      return response.ok;
-    } catch (error) {
-      console.error('Error saving tasks:', error);
-      return false;
-    }
-  }
-
-  async loadTasks(): Promise<any[]> {
-    // Check cache first
-    const cachedTasks = taskCache.getTasks();
-    if (cachedTasks && !this.shouldSync()) {
-      return cachedTasks;
-    }
-
-    const fileId = await this.findOrCreateTaskDataFile();
-    if (!fileId) return [];
-
-    try {
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-        {
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to load tasks from Google Drive');
-      }
-
-      const encryptedData = await response.text();
-      const decryptedData = this.decrypt(encryptedData);
-      const tasks = JSON.parse(decryptedData);
-
-      // Convert date strings back to Date objects
-      const processedTasks = tasks.map((task: any) => ({
-        ...task,
-        dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-        recurrence: task.recurrence ? {
-          ...task.recurrence,
-          endDate: task.recurrence.endDate ? new Date(task.recurrence.endDate) : undefined
-        } : undefined
-      }));
-
-      // Update cache with fresh data
-      taskCache.setTasks(processedTasks);
-      this.lastSyncTimestamp = Date.now();
-
-      return processedTasks;
-    } catch (error) {
-      console.error('Error loading tasks:', error);
-      // Return cached tasks if available, even if expired
-      return cachedTasks || [];
-    }
-  }
+  // Removed saveTasks - Task saving is now handled via socketService emitting events to the server
+  // Removed loadTasks - Task loading/syncing is now handled via socketService listening to server events
 }

@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { GoogleDriveService } from '@/lib/google-drive';
-import { useTaskStore } from './tasks';
+import { useTaskStore } from './tasks'; // Keep this for logout clearing
 import { useNotificationStore } from './notifications';
+// taskCache is no longer needed here for loading, but keep for logout clearing
 import { taskCache } from '@/lib/cache';
+import { socketService } from '@/lib/socket';
 
 interface User {
   id: string;
@@ -45,21 +47,9 @@ export const useAuthStore = create<AuthState>()(
             clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
           });
 
-          // First check cache for tasks
-          let tasks = taskCache.getTasks();
-          
-          // If no cached tasks, load from Google Drive
-          if (!tasks) {
-            tasks = await googleDrive.loadTasks();
-            if (tasks && tasks.length > 0) {
-              taskCache.setTasks(tasks);
-            }
-          }
+          // --- Task loading is handled by socketService.initialize() below ---
 
-          // Set tasks in store
-          useTaskStore.setState({ tasks: tasks || [] });
-
-          // Set auth state
+          // Set auth state (without setting tasks here)
           set({
             isAuthenticated: true,
             user: {
@@ -69,8 +59,12 @@ export const useAuthStore = create<AuthState>()(
               picture: userInfo.picture
             },
             accessToken,
-            googleDrive
+            googleDrive // Keep the service instance for file uploads/deletes
           });
+
+          // Initialize socket connection AFTER setting auth state
+          // This will trigger the 'authenticate' event on the server
+          socketService.initialize();
 
           useNotificationStore.getState().addNotification({
             type: 'success',
@@ -85,29 +79,14 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      // reloadTasks is no longer needed in its current form as sync is handled by socket connection
       reloadTasks: async () => {
-        const { googleDrive } = get();
-        if (!googleDrive) return;
-
-        try {
-          // First check cache
-          let tasks = taskCache.getTasks();
-          
-          // If no valid cache, load from Google Drive
-          if (!tasks) {
-            tasks = await googleDrive.loadTasks();
-            if (tasks && tasks.length > 0) {
-              taskCache.setTasks(tasks);
-            }
-          }
-
-          useTaskStore.setState({ tasks: tasks || [] });
-        } catch (error) {
-          console.error('Error reloading tasks:', error);
-          useNotificationStore.getState().addNotification({
-            type: 'error',
-            message: 'Failed to reload tasks'
-          });
+        console.warn("reloadTasks called, but task synchronization is now handled by socketService.initialize().");
+        // If a manual re-sync is desired, trigger socket initialization again.
+        const { isAuthenticated } = get();
+        if (isAuthenticated) {
+           console.log("Attempting re-sync via socketService.initialize()...");
+           socketService.initialize();
         }
       },
 
@@ -118,18 +97,61 @@ export const useAuthStore = create<AuthState>()(
           accessToken: null,
           googleDrive: null
         });
-        useTaskStore.setState({ tasks: [] });
+        // Clear task store state on logout
+        useTaskStore.setState({ tasks: [] }, true); // Replace state entirely
         taskCache.clear(); // Clear cache on logout
+        console.log('User logged out, auth state cleared.');
       },
     }),
     {
-      name: 'auth-storage',
+      name: 'auth-storage', // Local storage key
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
+        // Only persist these specific fields
         isAuthenticated: state.isAuthenticated,
         user: state.user,
         accessToken: state.accessToken,
       }),
+      // This function runs after the state is rehydrated from localStorage
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('Failed to rehydrate auth store:', error);
+            // Optionally clear state on rehydration error
+            // state?.logout?.();
+            return;
+          }
+          // Check if rehydrated state indicates user was previously authenticated
+          if (state?.isAuthenticated && state.accessToken) {
+            console.log('Rehydrating auth state, initializing Google Drive service...');
+            try {
+              // Initialize the GoogleDriveService instance needed for file operations
+              const googleDrive = new GoogleDriveService({
+                accessToken: state.accessToken,
+                clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+              });
+              // IMPORTANT: Directly mutating the state object here is how Zustand recommends handling this in onRehydrateStorage
+              state.googleDrive = googleDrive;
+
+              // Initialize socket connection after rehydration if authenticated
+              // Use setTimeout to ensure this runs after the store is fully updated
+              setTimeout(() => {
+                console.log('Attempting to initialize socket after rehydration...');
+                // Access the potentially updated state via getState() to ensure service is set
+                if (useAuthStore.getState().isAuthenticated) {
+                   socketService.initialize();
+                }
+              }, 0);
+            } catch (initError) {
+              console.error("Error initializing GoogleDriveService during rehydration:", initError);
+              // Optionally logout user if service init fails critically
+              // state.logout?.(); 
+            }
+          } else {
+            console.log('No authenticated state found during rehydration.');
+          }
+        };
+      },
     }
   )
 );

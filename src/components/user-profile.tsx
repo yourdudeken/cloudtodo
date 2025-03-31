@@ -11,12 +11,13 @@ export function UserProfile() {
 
   return (
     <Popover.Root>
+      {/* Trigger is now just the profile picture */}
       <Popover.Trigger asChild>
-        <button className="flex items-center gap-3 p-4 w-full hover:bg-gray-100 transition-colors">
+        <button className="flex items-center justify-center p-3 rounded-full hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
           {user.picture ? (
             <img
               src={user.picture}
-              alt={user.name}
+              alt={user.name} // Keep alt text for accessibility
               className="w-10 h-10 rounded-full"
             />
           ) : (
@@ -24,10 +25,6 @@ export function UserProfile() {
               <User className="w-6 h-6 text-blue-600" />
             </div>
           )}
-          <div className="flex-1 text-left">
-            <div className="font-medium truncate">{user.name}</div>
-            <div className="text-sm text-gray-500 truncate">{user.email}</div>
-          </div>
         </button>
       </Popover.Trigger>
 
