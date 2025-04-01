@@ -1,18 +1,18 @@
 import { google } from 'googleapis';
-import CryptoJS from 'crypto-js';
+// Remove CryptoJS import
+// import CryptoJS from 'crypto-js';
 
 const TASKS_FOLDER_NAME = 'CloudTask';
 const TASK_DATA_FILE = 'tasks.json';
-// Remove module-level constant, key will be passed in constructor
 
 export class GoogleDriveService {
   constructor(config) {
-    // Store encryption key from config
-    this.encryptionKey = config.encryptionKey;
-    if (!this.encryptionKey) {
-      console.error("GoogleDriveService: Encryption key was not provided in config!");
-      throw new Error("Server configuration error: Missing Encryption Key for Drive Service.");
-    }
+    // Remove encryption key handling
+    // this.encryptionKey = config.encryptionKey;
+    // if (!this.encryptionKey) {
+    //   console.error("GoogleDriveService: Encryption key was not provided in config!");
+    //   throw new Error("Server configuration error: Missing Encryption Key for Drive Service.");
+    // }
 
     // Initialize OAuth2 client with credentials needed for refresh token flow
     this.auth = new google.auth.OAuth2(
@@ -105,43 +105,22 @@ export class GoogleDriveService {
     }
   }
 
+  // Remove encrypt method
+  /*
   encrypt(data) {
-    // Use instance property for the key
-    if (!this.encryptionKey) throw new Error("Encryption key not set.");
-    return CryptoJS.AES.encrypt(data, this.encryptionKey).toString();
+    // ... implementation removed ...
   }
+  */
 
+  // Remove decrypt method
+  /*
   decrypt(data) {
-    // Log the key being used for decryption (using the instance property)
-    console.log(`decrypt: Using encryptionKey: ${this.encryptionKey ? '****** (set)' : '!!! NOT SET !!!'}`); // Avoid logging the actual key value
-    if (!this.encryptionKey) {
-       console.error("decrypt: encryptionKey instance property is missing or undefined. Cannot decrypt.");
-       throw new Error('Decryption failed: Missing Key');
-    }
-    try {
-      // Use instance property for the key
-      const bytes = CryptoJS.AES.decrypt(data, this.encryptionKey);
-      const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-      // Add check for empty decrypted string which might indicate decryption failure with certain inputs/keys
-      if (!decrypted && data) { // Check if original data existed but decryption yielded nothing
-        console.error('Decryption resulted in empty string. Check ENCRYPTION_KEY or data integrity.');
-        // Use a more specific error message
-        throw new Error('Decryption failed: Empty Result');
-      }
-      console.log('Decryption successful.'); // Log success
-      return decrypted;
-    } catch (error) {
-      // Log the specific error before re-throwing
-      console.error(`Error during decryption process: ${error.message}`);
-      // Add the original error type if possible
-      if (error.name) console.error(`Decryption Error Type: ${error.name}`);
-      // Re-throw a potentially more informative error if needed, or the original
-      throw new Error(`Decryption failed: ${error.message}`);
-    }
+    // ... implementation removed ...
   }
+  */
 
   async saveTasks(tasks) {
-    console.log(`[saveTasks] Attempting to save ${tasks.length} tasks.`);
+    console.log(`[saveTasks] Attempting to save ${tasks.length} tasks (unencrypted).`);
     const fileId = await this.findOrCreateTaskDataFile();
     if (!fileId) {
        console.error('[saveTasks] Failed: Could not get fileId.');
@@ -157,17 +136,17 @@ export class GoogleDriveService {
       const jsonData = JSON.stringify(tasks);
       console.log('[saveTasks] Stringified JSON data length:', jsonData.length);
 
-      console.log('[saveTasks] Encrypting data...');
-      const encryptedData = this.encrypt(jsonData);
-      console.log('[saveTasks] Encrypted data length:', encryptedData.length);
-      // console.log(`[saveTasks] Encrypted data snippet: ${encryptedData.substring(0, 50)}...`); // Optional: log snippet
+      // Remove encryption step
+      // console.log('[saveTasks] Encrypting data...');
+      // const encryptedData = this.encrypt(jsonData);
+      // console.log('[saveTasks] Encrypted data length:', encryptedData.length);
 
-      console.log('[saveTasks] Calling drive.files.update...');
+      console.log('[saveTasks] Calling drive.files.update with plain JSON...');
       const response = await this.drive.files.update({
         fileId: fileId,
         media: {
-          mimeType: 'application/json', // Ensure this is correct
-          body: encryptedData,
+          mimeType: 'application/json',
+          body: jsonData, // Save plain JSON data
         },
       });
 
@@ -215,27 +194,42 @@ export class GoogleDriveService {
       // Avoid logging potentially large encrypted data unless necessary for debugging
       // console.log(`loadTasks: Raw data snippet: ${JSON.stringify(response.data).substring(0, 100)}...`);
 
-      const encryptedData = response.data;
-      console.log('loadTasks: Attempting to decrypt data...');
-      const decryptedData = this.decrypt(encryptedData); // Decryption logs added inside decrypt
+      // Remove decryption step
+      // const encryptedData = response.data;
+      // console.log('loadTasks: Attempting to decrypt data...');
+      // const decryptedData = this.decrypt(encryptedData);
 
-      // Check if decryption actually returned something meaningful
-       if (!decryptedData) {
-         console.error('loadTasks: Decrypted data is empty or null. Cannot parse.');
-         return []; // Return empty if decryption failed silently
+      // Directly parse the response data
+      const jsonData = response.data;
+
+      // Check if decryption actually returned something meaningful (now check jsonData)
+       if (!jsonData) {
+         console.error('loadTasks: Received data is empty or null. Cannot parse.');
+         return []; // Return empty if Drive returned nothing
        }
 
-      console.log('loadTasks: Attempting to parse decrypted data...');
-      const tasks = JSON.parse(decryptedData);
+      console.log('loadTasks: Attempting to parse JSON data...');
+      // Assuming response.data is already the parsed JSON object or needs parsing if it's a string
+      let tasks;
+      if (typeof jsonData === 'string') {
+          tasks = JSON.parse(jsonData);
+      } else if (typeof jsonData === 'object') {
+          tasks = jsonData; // Assume googleapis library parsed it
+      } else {
+          console.error('loadTasks: Received data is not a string or object. Cannot parse.');
+          return [];
+      }
+
       console.log(`loadTasks: Successfully parsed ${tasks.length} tasks.`);
       return tasks;
     } catch (error) {
       console.error(`loadTasks: Error loading or processing tasks for fileId ${fileId}:`, error.message);
       // Log specific error types based on the re-thrown error message
       if (error instanceof SyntaxError) {
-         console.error("loadTasks: JSON parsing failed. Decrypted data might be corrupted or not valid JSON.");
-      } else if (error.message.startsWith('Decryption failed:')) {
-         console.error(`loadTasks: ${error.message}. Check ENCRYPTION_KEY consistency or file corruption.`);
+         console.error("loadTasks: JSON parsing failed. Data might be corrupted or not valid JSON.");
+      // Remove decryption error check
+      // } else if (error.message.startsWith('Decryption failed:')) {
+      //    console.error(`loadTasks: ${error.message}. Check ENCRYPTION_KEY consistency or file corruption.`);
       } else if (error.response?.status === 404) { // Check if it's a GaxiosError first
          console.error(`loadTasks: File not found (404) for fileId ${fileId}. Maybe deleted externally?`);
       } else {

@@ -1,28 +1,39 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { GoogleDriveService } from '@/lib/google-drive';
-import { useTaskStore } from './tasks'; // Keep this for logout clearing
+import { googleLogout, TokenResponse } from '@react-oauth/google'; // Import googleLogout and TokenResponse
+import axios, { AxiosError } from 'axios'; // Import axios
+import { useTaskStore } from './tasks';
 import { useNotificationStore } from './notifications';
-// taskCache is no longer needed here for loading, but keep for logout clearing
 import { taskCache } from '@/lib/cache';
-import { socketService } from '@/lib/socket';
+// Remove socketService import if no longer needed for auth/user info
+// import { socketService } from '@/lib/socket';
 
-interface User {
+// --- Remove PKCE Helpers ---
+
+// Define UserProfile interface based on example
+interface UserProfile {
   id: string;
-  name: string;
   email: string;
+  name: string;
   picture: string;
 }
 
+// Update AuthState
 interface AuthState {
   isAuthenticated: boolean;
-  user: User | null;
+  user: UserProfile | null; // Use UserProfile type
   accessToken: string | null;
-  googleDrive: GoogleDriveService | null;
-  login: (response: any) => Promise<void>;
+  isLoggingIn: boolean; // Keep for loading state during profile fetch
+  isLoadingProfile: boolean; // Specific loading state for profile fetch
+  // Remove PKCE-related methods
+  // login: () => Promise<void>;
+  // handleAuthCallback: () => Promise<void>;
+  loginSuccess: (tokenResponse: Omit<TokenResponse, 'error' | 'error_description' | 'error_uri'>) => void; // New method
+  fetchUserProfile: () => Promise<void>; // New method
   logout: () => void;
-  reloadTasks: () => Promise<void>;
 }
+
+// Remove CODE_VERIFIER_KEY
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -30,128 +41,141 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       user: null,
       accessToken: null,
-      googleDrive: null,
+      isLoggingIn: false, // Used during token acquisition/profile fetch
+      isLoadingProfile: false, // Initialize profile loading state
 
-      login: async (response) => {
-        const accessToken = response.access_token;
-        
+      // New method to handle successful login from @react-oauth/google
+      loginSuccess: (tokenResponse) => {
+        console.log('Login Success (Token Response):', tokenResponse);
+        set({
+          accessToken: tokenResponse.access_token,
+          isLoggingIn: true, // Indicate that we are now fetching the profile
+          isLoadingProfile: true,
+          isAuthenticated: false, // Not fully authenticated until profile is fetched
+          user: null, // Clear previous user data
+        });
+        // Fetch user profile after getting the token
+        get().fetchUserProfile();
+      },
+
+      // New method to fetch user profile
+      fetchUserProfile: async () => {
+        const accessToken = get().accessToken;
+        if (!accessToken) {
+          set({ isLoadingProfile: false, isLoggingIn: false });
+          return; // Should not happen if called correctly
+        }
+
+        set({ isLoadingProfile: true }); // Ensure loading state is true
+
         try {
-          // Get user info from Google
-          const userInfo = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${accessToken}` }
-          }).then(res => res.json());
-
-          // Initialize Google Drive service
-          const googleDrive = new GoogleDriveService({
-            accessToken,
-            clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-          });
-
-          // --- Task loading is handled by socketService.initialize() below ---
-
-          // Set auth state (without setting tasks here)
+          const response = await axios.get<UserProfile>(
+            `https://www.googleapis.com/oauth2/v1/userinfo?alt=json`,
+            {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            }
+          );
+          const userProfile = response.data;
           set({
-            isAuthenticated: true,
-            user: {
-              id: userInfo.sub,
-              name: userInfo.name,
-              email: userInfo.email,
-              picture: userInfo.picture
-            },
-            accessToken,
-            googleDrive // Keep the service instance for file uploads/deletes
+            user: userProfile,
+            isAuthenticated: true, // Now fully authenticated
+            isLoggingIn: false, // Finished the login process
+            isLoadingProfile: false,
           });
+          console.log('User profile fetched:', userProfile);
+          // Trigger Drive initialization from task store *after* user profile is set
+          // Use setTimeout to ensure state update propagates
+          setTimeout(() => {
+            useTaskStore.getState().initializeDrive();
+          }, 0);
 
-          // Initialize socket connection AFTER setting auth state
-          // This will trigger the 'authenticate' event on the server
-          socketService.initialize();
-
-          useNotificationStore.getState().addNotification({
-            type: 'success',
-            message: 'Successfully connected to Google Drive'
-          });
-        } catch (error) {
-          console.error('Login error:', error);
+        } catch (error: unknown) {
+          console.error('Error fetching user profile:', error);
+          const axiosError = error as AxiosError;
           useNotificationStore.getState().addNotification({
             type: 'error',
-            message: 'Failed to connect to Google Drive'
+            message: `Failed to fetch user profile: ${axiosError.message || 'Unknown error'}`,
           });
+          // Logout if profile fetch fails
+          get().logout(); // Call internal logout to clear state
+        } finally {
+           // Ensure loading states are reset even if initializeDrive fails
+           set({ isLoadingProfile: false, isLoggingIn: false });
         }
       },
 
-      // reloadTasks is no longer needed in its current form as sync is handled by socket connection
-      reloadTasks: async () => {
-        console.warn("reloadTasks called, but task synchronization is now handled by socketService.initialize().");
-        // If a manual re-sync is desired, trigger socket initialization again.
-        const { isAuthenticated } = get();
-        if (isAuthenticated) {
-           console.log("Attempting re-sync via socketService.initialize()...");
-           socketService.initialize();
-        }
-      },
-
+      // Updated Logout Function
       logout: () => {
+        console.log('Logging out...');
+        const accessToken = get().accessToken;
+        if (accessToken) {
+          // Revoke token (optional but good practice)
+           axios.post(`https://oauth2.googleapis.com/revoke?token=${accessToken}`)
+             .catch(err => console.error("Token revocation failed:", err));
+        }
+        googleLogout(); // Call logout from @react-oauth/google
+        // Clear local state
         set({
           isAuthenticated: false,
           user: null,
           accessToken: null,
-          googleDrive: null
+          isLoggingIn: false,
+          isLoadingProfile: false,
         });
-        // Clear task store state on logout
-        useTaskStore.setState({ tasks: [] }, true); // Replace state entirely
-        taskCache.clear(); // Clear cache on logout
-        console.log('User logged out, auth state cleared.');
+        // Clear task store state
+        useTaskStore.getState().clearTasks(); // Call clearTasks from task store
+        taskCache.clear(); // Clear cache
+        // Disconnect socket if it was used
+        // socketService.disconnect();
+        localStorage.removeItem('auth-storage'); // Clear persisted state
+        console.log('User logged out, auth state and storage cleared.');
       },
+
+      // --- Remove PKCE login/handleAuthCallback ---
+
     }),
     {
-      name: 'auth-storage', // Local storage key
+      name: 'auth-storage',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Only persist these specific fields
-        isAuthenticated: state.isAuthenticated,
-        user: state.user,
+        // Only persist token and potentially user info (though profile fetch on load is better)
         accessToken: state.accessToken,
+        // Persisting user might lead to stale data, fetch on load instead
+        // user: state.user,
+        // isAuthenticated: state.isAuthenticated // Re-evaluate based on token validity
       }),
-      // This function runs after the state is rehydrated from localStorage
       onRehydrateStorage: () => {
         return (state, error) => {
           if (error) {
             console.error('Failed to rehydrate auth store:', error);
-            // Optionally clear state on rehydration error
-            // state?.logout?.();
             return;
           }
-          // Check if rehydrated state indicates user was previously authenticated
-          if (state?.isAuthenticated && state.accessToken) {
-            console.log('Rehydrating auth state, initializing Google Drive service...');
-            try {
-              // Initialize the GoogleDriveService instance needed for file operations
-              const googleDrive = new GoogleDriveService({
-                accessToken: state.accessToken,
-                clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-              });
-              // IMPORTANT: Directly mutating the state object here is how Zustand recommends handling this in onRehydrateStorage
-              state.googleDrive = googleDrive;
 
-              // Initialize socket connection after rehydration if authenticated
-              // Use setTimeout to ensure this runs after the store is fully updated
-              setTimeout(() => {
-                console.log('Attempting to initialize socket after rehydration...');
-                // Access the potentially updated state via getState() to ensure service is set
-                if (useAuthStore.getState().isAuthenticated) {
-                   socketService.initialize();
-                }
-              }, 0);
-            } catch (initError) {
-              console.error("Error initializing GoogleDriveService during rehydration:", initError);
-              // Optionally logout user if service init fails critically
-              // state.logout?.(); 
-            }
+          // Reset loading flags on rehydration
+          if (state) {
+              state.isLoggingIn = false;
+              state.isLoadingProfile = false;
+          }
+
+
+          // If accessToken exists after rehydration, try fetching profile
+          if (state?.accessToken) {
+            console.log('Rehydrated with access token, attempting to fetch profile...');
+            // Use setTimeout to ensure this runs after initial setup
+            setTimeout(() => {
+                // Check token validity before fetching profile (optional but recommended)
+                // A simple way is just to try fetching the profile
+                state.fetchUserProfile();
+            }, 50); // Small delay
           } else {
-            console.log('No authenticated state found during rehydration.');
+            console.log('No access token found during rehydration.');
+            // Ensure user is logged out if no token
+            state?.logout?.();
           }
         };
       },
     }
   )
 );
+
+// --- Remove previous subscribe logic ---

@@ -21,6 +21,7 @@
     "@radix-ui/react-slot": "^1.0.2",
     "@react-oauth/google": "^0.12.1",
     "@supabase/supabase-js": "^2.49.4",
+    "axios": "^1.8.4",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "concurrently": "^8.2.2",

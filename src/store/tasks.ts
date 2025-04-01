@@ -1,329 +1,340 @@
 import { create } from 'zustand';
 import { useAuthStore } from './auth';
-import { socketService } from '@/lib/socket';
-import { FileAttachment, TaskComment } from '@/lib/google-drive'; // Import TaskComment
+// Remove socketService import
+// import { socketService } from '@/lib/socket';
+import {
+    // Import new Drive functions and types
+    createTask as driveCreateTask,
+    listTasks as driveListTasks,
+    readTask as driveReadTask,
+    updateTask as driveUpdateTask,
+    deleteTask as driveDeleteTask,
+    uploadAttachment as driveUploadAttachment,
+    getOrCreateFolder,
+    ensureAttachmentFoldersExist,
+    TaskData, // Use the interface from google-drive
+    ROOT_FOLDER_NAME,
+    AUDIO_FOLDER_NAME,
+    VIDEO_FOLDER_NAME,
+    DOCUMENT_FOLDER_NAME,
+    PICTURE_FOLDER_NAME,
+} from '@/lib/google-drive';
 import { useNotificationStore } from './notifications';
 import { taskCache } from '@/lib/cache';
-import { 
-  scheduleTaskNotification, 
-  cancelTaskNotification, 
-  rescheduleTaskNotification 
-} from '@/lib/browser-notifications'; // Import notification scheduling functions
+import {
+  scheduleTaskNotification,
+  cancelTaskNotification,
+  rescheduleTaskNotification,
+  scheduleNotificationsForTasks, // Keep for initial load
+  clearAllScheduledNotifications, // Keep for logout/disconnect
+} from '@/lib/browser-notifications';
+import mime from 'mime-types'; // Needed for determining attachment folder
 
-export interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  completed: boolean;
-  projectId: string;
-  dueDate?: Date;
-  dueTime?: string;
-  reminder?: number;
-  priority: 1 | 2 | 3 | 4;
-  isStarred?: boolean;
-  isPinned?: boolean;
-  category?: string;
-  tags?: string[];
-  attachments?: FileAttachment[];
-  recurrence?: {
-    frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
-    interval: number;
-    endDate?: Date;
-    occurrences?: number;
-  };
-  collaborators?: {
-    id: string;
-    userId: string;
-    userEmail: string;
-    role: 'viewer' | 'editor';
-    createdAt: string;
-  }[];
-  comments?: TaskComment[]; // Use TaskComment type if defined elsewhere, or keep inline structure
-  taskType: 'personal' | 'collaborative'; // Added task type
-  createdAt: number; // Added creation timestamp (Unix milliseconds)
-  // userId?: string; // Removed userId field as it's not used for notifications anymore
+// --- Align Task interface with TaskData ---
+// Use TaskData as the base. The 'id' field in TaskData will store the Google Drive file ID.
+export type Task = TaskData;
+
+// Define a structure for attachments in the UI state, mapping to TaskData.attachments
+// This helps bridge the gap between Drive IDs and usable attachment info.
+export interface UIAttachment {
+    driveFileId: string;
+    name: string; // Store name for display
+    type: 'audio' | 'video' | 'document' | 'image' | 'other';
+    // Add other relevant UI fields like webViewLink if needed after upload/fetch
+    webViewLink?: string;
 }
 
+// Helper to map TaskData attachments (string IDs) to UIAttachment[]
+// This is a basic version; might need enhancement to fetch names/links later.
+const mapTaskDataAttachmentsToUI = (taskData: TaskData): UIAttachment[] => {
+    const uiAttachments: UIAttachment[] = [];
+    const addAttachments = (ids: string[] | undefined, type: UIAttachment['type']) => {
+        (ids || []).forEach(id => {
+            // Placeholder name - ideally fetch real name or store it in TaskData
+            uiAttachments.push({ driveFileId: id, name: `Attachment (${type})`, type });
+        });
+    };
+
+    addAttachments(taskData.attachments?.audio, 'audio');
+    addAttachments(taskData.attachments?.videos, 'video');
+    addAttachments(taskData.attachments?.documents, 'document');
+    addAttachments(taskData.attachments?.images, 'image');
+
+    return uiAttachments;
+};
+
+// Helper to determine attachment folder based on file type
+const getAttachmentFolder = (fileType: string): string => {
+    if (fileType.startsWith('audio/')) return AUDIO_FOLDER_NAME;
+    if (fileType.startsWith('video/')) return VIDEO_FOLDER_NAME;
+    if (fileType.startsWith('image/')) return PICTURE_FOLDER_NAME;
+    // Add more specific document types if needed
+    return DOCUMENT_FOLDER_NAME; // Default for others
+};
+
+
 interface TaskState {
-  tasks: Task[];
+  tasks: Task[]; // Now uses the TaskData structure
+  uiAttachments: { [taskId: string]: UIAttachment[] }; // Store UI-friendly attachments separately
   categories: string[];
   tags: string[];
-  addTask: (task: Omit<Task, 'id' | 'createdAt'>) => Promise<void>; // Omit createdAt as well
-  toggleTask: (id: string) => Promise<void>;
-  deleteTask: (id: string) => Promise<void>;
-  updateTask: (id: string, task: Partial<Task>) => Promise<void>;
-  addComment: (taskId: string, content: string) => Promise<void>;
-  addCollaborator: (taskId: string, userEmail: string, role: 'viewer' | 'editor') => Promise<void>;
-  removeCollaborator: (taskId: string, collaboratorId: string) => Promise<void>;
+  cloudTaskFolderId: string | null; // ID of the root CLOUDTASK folder
+  isLoading: boolean; // Flag for loading state
+  initializeDrive: () => Promise<void>; // Function to setup Drive and load tasks
+  addTask: (taskData: Omit<TaskData, 'id' | 'createdDate' | 'updatedDate' | 'status' | 'attachments'>) => Promise<string | null>; // Return new task ID or null
+  toggleTask: (id: string) => Promise<void>; // ID is now the Drive File ID
+  deleteTask: (id: string) => Promise<void>; // ID is now the Drive File ID
+  updateTask: (id: string, taskUpdateData: Partial<Omit<TaskData, 'id' | 'createdDate' | 'updatedDate'>>) => Promise<void>; // Adjusted input type
   addCategory: (category: string) => void;
   addTag: (tag: string) => void;
-  syncWithDrive: () => Promise<void>;
-  uploadAttachment: (taskId: string, file: File) => Promise<void>;
-  deleteAttachment: (taskId: string, attachmentId: string) => Promise<void>;
+  uploadAttachment: (taskId: string, file: File) => Promise<void>; // ID is Drive File ID
+  clearTasks: () => void; // Function to clear tasks on logout
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
+  uiAttachments: {},
   categories: ['Work', 'Personal', 'Shopping', 'Health', 'Education'],
   tags: ['Important', 'Urgent', 'In Progress', 'Blocked', 'Review'],
+  cloudTaskFolderId: null,
+  isLoading: false,
 
-  // addTask now only sends data to the server. The 'taskAdded' socket listener handles adding to state.
+  clearTasks: () => {
+    set({ tasks: [], uiAttachments: {}, cloudTaskFolderId: null, isLoading: false });
+    taskCache.clear();
+    clearAllScheduledNotifications();
+    console.log('Task store cleared.');
+  },
+
+  initializeDrive: async () => {
+    // Prevent concurrent execution
+    if (get().isLoading) {
+        console.log('Drive initialization already in progress. Skipping.');
+        return;
+    }
+    // Check for existing folder ID *after* checking isLoading
+    if (get().cloudTaskFolderId) {
+        console.log('Drive already initialized (folder ID present).');
+        return;
+    }
+     // Check for access token *after* checking isLoading
+    const { accessToken } = useAuthStore.getState();
+    if (!accessToken) {
+      console.error('Cannot initialize Drive: No access token.');
+      return;
+    }
+
+    // Set loading state immediately and synchronously
+    set({ isLoading: true });
+    console.log('Starting Drive initialization...'); // Add log
+    useNotificationStore.getState().addNotification({ type: 'info', message: 'Connecting to Google Drive...' });
+
+    try {
+      // 1. Get or Create Root Folder
+      const folderId = await getOrCreateFolder(accessToken, ROOT_FOLDER_NAME, 'root');
+      if (!folderId) {
+        throw new Error(`Failed to get or create root folder '${ROOT_FOLDER_NAME}'.`);
+      }
+      set({ cloudTaskFolderId: folderId });
+      console.log(`Root folder ID: ${folderId}`);
+
+      // 2. Ensure Attachment Subfolders Exist
+      await ensureAttachmentFoldersExist(accessToken, folderId);
+
+      // 3. List Task Files
+      const taskFiles = await driveListTasks(accessToken, folderId);
+      if (!taskFiles) {
+        throw new Error('Failed to list tasks from Google Drive.');
+      }
+
+      // 4. Read each task file content
+      const tasks: Task[] = [];
+      const uiAttachmentsMap: { [taskId: string]: UIAttachment[] } = {};
+      for (const file of taskFiles) {
+        const taskData = await driveReadTask(accessToken, file.id);
+        if (taskData) {
+          // Ensure the task has an ID (which should be the file ID)
+          if (!taskData.id) taskData.id = file.id;
+          tasks.push(taskData);
+          uiAttachmentsMap[taskData.id] = mapTaskDataAttachmentsToUI(taskData);
+        } else {
+          console.warn(`Failed to read task content for file ID: ${file.id}`);
+        }
+      }
+
+      set({ tasks, uiAttachments: uiAttachmentsMap, isLoading: false });
+      taskCache.setTasks(tasks); // Update cache
+      scheduleNotificationsForTasks(tasks); // Schedule browser notifications
+      useNotificationStore.getState().addNotification({ type: 'success', message: 'Tasks loaded from Google Drive.' });
+      console.log(`Loaded ${tasks.length} tasks.`);
+
+    } catch (error) {
+      console.error('Error initializing Google Drive:', error);
+      set({ isLoading: false });
+      useNotificationStore.getState().addNotification({ type: 'error', message: `Drive Connection Error: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      // Optionally logout or clear state on critical init failure
+      // useAuthStore.getState().logout();
+    } finally {
+        // Ensure isLoading is always reset
+        set({ isLoading: false });
+        console.log('Drive initialization finished (success or error).'); // Add log
+    }
+  },
+
   addTask: async (taskData) => {
-    // Prepare data to send (without client-generated ID or createdAt)
-    const dataToSend = {
-      ...taskData,
-      // Ensure required fields have defaults if not provided by the form/caller
-      completed: taskData.completed ?? false,
-      priority: taskData.priority ?? 4,
-      projectId: taskData.projectId || 'inbox', // Ensure projectId exists
-      // Server will add id, createdAt, collaborators, comments, attachments etc.
+    const { accessToken } = useAuthStore.getState();
+    const { cloudTaskFolderId } = get();
+    if (!accessToken || !cloudTaskFolderId) {
+      useNotificationStore.getState().addNotification({ type: 'error', message: 'Cannot add task: Drive not initialized.' });
+      return null; // Return null on failure
+    }
+
+    // Ensure attachments object exists even if empty
+    const taskDataWithAttachments = {
+        ...taskData,
+        attachments: { audio: [], videos: [], documents: [], images: [] }
     };
 
     try {
-      // Emit event to server with the core task data
-      console.log('[store/addTask] Emitting addTask event with data:', dataToSend);
-      socketService.addTask(dataToSend);
+      const newFileId = await driveCreateTask(accessToken, cloudTaskFolderId, taskDataWithAttachments);
+      if (newFileId) {
+        const newTask: Task = {
+          ...taskDataWithAttachments,
+          id: newFileId, // Add the Drive file ID
+          createdDate: new Date().toISOString(),
+          updatedDate: new Date().toISOString(),
+          status: 'pending',
+        };
+        set((state) => ({
+          tasks: [...state.tasks, newTask],
+          uiAttachments: { ...state.uiAttachments, [newFileId]: [] } // Initialize empty UI attachments
+        }));
+        taskCache.setTasks(get().tasks);
+        scheduleTaskNotification(newTask);
+        useNotificationStore.getState().addNotification({ type: 'success', message: `Task "${newTask.taskTitle}" added.` });
+        return newFileId; // Return the new ID on success
+      } else {
+        throw new Error('Failed to create task file in Google Drive.');
+      }
+    } catch (error) {
+      console.error('Error adding task:', error);
+      useNotificationStore.getState().addNotification({ type: 'error', message: 'Failed to add task.' });
+      return null; // Return null on failure
+    }
+  },
 
-      // Notification can remain, or be triggered by the 'taskAdded' listener later
-      useNotificationStore.getState().addNotification({
-        type: 'info', // Changed to info as success is confirmed by server event
-        message: 'Adding task...'
-      });
-    } catch (error) { // Catch potential synchronous errors in socketService.addTask if any
-      console.error('Error emitting addTask event:', error);
-      // No state to revert as optimistic update was removed
-      useNotificationStore.getState().addNotification({
-        type: 'error',
-        message: 'Failed to add task'
-       });
-       // Schedule notification after successful add (or rely on socket listener)
-       // Note: Scheduling might be better handled in the 'taskAdded' socket listener 
-       // after the task with its final ID and details is added to the store.
-       // If scheduling here, ensure the taskData includes enough info (dueDate, reminder).
-       // scheduleTaskNotification({ id: /* Need ID from server */, ...dataToSend }); 
-     }
-   },
+  toggleTask: async (id) => {
+    const { accessToken } = useAuthStore.getState();
+    if (!accessToken) return;
 
-   toggleTask: async (id) => {
-     const originalTasks = get().tasks;
-     const task = originalTasks.find(t => t.id === id);
+    const originalTasks = get().tasks;
+    const task = originalTasks.find(t => t.id === id);
     if (!task) return;
 
-    const updatedTask = { ...task, completed: !task.completed };
+    const updatedStatus = task.status === 'completed' ? 'pending' : 'completed';
+    const updatePayload = { status: updatedStatus };
 
     try {
       // Optimistic update
+      const updatedTask = { ...task, ...updatePayload };
       set({ tasks: originalTasks.map(t => t.id === id ? updatedTask : t) });
       taskCache.setTasks(get().tasks);
 
-       // Emit update to server
-       socketService.updateTask(updatedTask);
+      // Update in Drive
+      const driveUpdateResult = await driveUpdateTask(accessToken, id, updatePayload);
+      if (!driveUpdateResult) {
+          throw new Error('Google Drive update failed.');
+      }
 
-       // Reschedule notification based on new completion status
-       rescheduleTaskNotification(updatedTask);
+      // Update state again with confirmed data from Drive (includes updatedDate)
+      set((state) => ({
+          tasks: state.tasks.map(t => t.id === id ? { ...t, ...driveUpdateResult } : t)
+      }));
+      taskCache.setTasks(get().tasks);
+      rescheduleTaskNotification(get().tasks.find(t => t.id === id)!); // Reschedule notification
 
-     } catch (error) { // This catch might not be effective for socket errors
-       console.error('Error toggling task status via socket:', error);
+    } catch (error) {
+      console.error('Error toggling task status:', error);
       // Revert optimistic update
       set({ tasks: originalTasks });
       taskCache.setTasks(originalTasks);
-
-      useNotificationStore.getState().addNotification({
-        type: 'error',
-        message: 'Failed to update task status'
-      });
+      rescheduleTaskNotification(task); // Reschedule based on original state
+      useNotificationStore.getState().addNotification({ type: 'error', message: 'Failed to update task status.' });
     }
   },
 
   deleteTask: async (id) => {
+    const { accessToken } = useAuthStore.getState();
+    if (!accessToken) return;
+
     const originalTasks = get().tasks;
     const taskToDelete = originalTasks.find(t => t.id === id);
     if (!taskToDelete) return;
 
     try {
-      // Optimistic update (remove immediately from UI)
-      // Note: The socket listener for 'taskDeleted' will also perform this removal.
-      // Depending on desired UX, you might remove this optimistic update and rely solely on the listener.
-      set({ tasks: originalTasks.filter(task => task.id !== id) });
+      // Optimistic update
+      set({
+          tasks: originalTasks.filter(task => task.id !== id),
+          uiAttachments: Object.fromEntries(Object.entries(get().uiAttachments).filter(([taskId]) => taskId !== id))
+      });
       taskCache.setTasks(get().tasks);
+      cancelTaskNotification(id); // Cancel notification
 
-       // Emit delete event to server
-       socketService.deleteTask(id);
+      // Delete from Drive
+      const success = await driveDeleteTask(accessToken, id);
+      if (!success) {
+        // Drive deletion failed (might already be deleted, which is okay)
+        console.warn(`Drive deletion failed or file not found for ID: ${id}. Assuming deleted.`);
+        // No need to revert optimistic UI update if file is gone
+      }
+      useNotificationStore.getState().addNotification({ type: 'success', message: 'Task deleted.' });
 
-       // Cancel any scheduled notification for the deleted task
-       cancelTaskNotification(id);
-
-       // No need to call syncWithDrive here
-       useNotificationStore.getState().addNotification({
-        type: 'success', // Or remove notification if handled by listener
-        message: 'Task deleted'
-      });
-
-    } catch (error) { // This catch might not be effective for socket errors
-      console.error('Error deleting task via socket:', error);
-      // Revert optimistic update if needed (though listener might handle it)
-      set({ tasks: originalTasks });
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      // Revert optimistic update only if Drive call truly failed (not just 404)
+      set({ tasks: originalTasks, uiAttachments: get().uiAttachments }); // Revert fully might be complex, consider just logging
       taskCache.setTasks(originalTasks);
-
-      useNotificationStore.getState().addNotification({
-        type: 'error',
-        message: 'Failed to delete task'
-      });
+      scheduleTaskNotification(taskToDelete); // Reschedule notification
+      useNotificationStore.getState().addNotification({ type: 'error', message: 'Failed to delete task.' });
     }
   },
 
   updateTask: async (id, updatedFields) => {
+    const { accessToken } = useAuthStore.getState();
+    if (!accessToken) return;
+
     const originalTasks = get().tasks;
     const taskToUpdate = originalTasks.find(t => t.id === id);
     if (!taskToUpdate) return;
 
-    const updatedTask = { ...taskToUpdate, ...updatedFields };
+    // Exclude fields managed by Drive functions from optimistic update if necessary
+    const optimisticUpdate = { ...taskToUpdate, ...updatedFields };
 
     try {
       // Optimistic update
-      set({ tasks: originalTasks.map(t => t.id === id ? updatedTask : t) });
+      set({ tasks: originalTasks.map(t => t.id === id ? optimisticUpdate : t) });
       taskCache.setTasks(get().tasks);
 
-       // Emit update to server
-       socketService.updateTask(updatedTask);
+      // Update in Drive
+      const driveUpdateResult = await driveUpdateTask(accessToken, id, updatedFields);
+      if (!driveUpdateResult) {
+          throw new Error('Google Drive update failed.');
+      }
 
-       // Reschedule notification based on updated details
-       rescheduleTaskNotification(updatedTask);
+      // Update state again with confirmed data from Drive
+      set((state) => ({
+          tasks: state.tasks.map(t => t.id === id ? { ...t, ...driveUpdateResult } : t)
+      }));
+      taskCache.setTasks(get().tasks);
+      rescheduleTaskNotification(get().tasks.find(t => t.id === id)!); // Reschedule notification
 
-     } catch (error) { // This catch might not be effective for socket errors
-       console.error('Error updating task via socket:', error);
+    } catch (error) {
+      console.error('Error updating task:', error);
       // Revert optimistic update
       set({ tasks: originalTasks });
       taskCache.setTasks(originalTasks);
-
-      useNotificationStore.getState().addNotification({
-        type: 'error',
-        message: 'Failed to update task'
-      });
-    }
-  },
-
-  // addComment now updates the task locally and emits an updateTask event
-  addComment: async (taskId: string, content: string) => {
-    const user = useAuthStore.getState().user;
-    // Require login to comment for now
-    if (!user) {
-       console.error("Cannot add comment: User not logged in.");
-       useNotificationStore.getState().addNotification({ type: 'error', message: 'You must be logged in to comment.' });
-       return;
-    }
-
-    const originalTasks = get().tasks;
-    const taskToUpdate = originalTasks.find(t => t.id === taskId);
-    if (!taskToUpdate) {
-      console.error("Cannot add comment: Task not found.");
-      useNotificationStore.getState().addNotification({ type: 'error', message: 'Task not found.' });
-      return;
-    }
-
-    // Ensure TaskComment type includes necessary fields or adjust as needed
-    const newComment: TaskComment = {
-      id: crypto.randomUUID(),
-      content,
-      createdAt: new Date().toISOString(),
-      userId: user.id, // Assuming user object has an id
-      userEmail: user.email // Assuming user object has an email
-    };
-
-    const updatedTask = {
-      ...taskToUpdate,
-      comments: [...(taskToUpdate.comments || []), newComment] // Add new comment to array
-    };
-
-    try {
-      // Optimistic update
-      set({ tasks: originalTasks.map(t => t.id === taskId ? updatedTask : t) });
-      taskCache.setTasks(get().tasks);
-
-      // Emit updateTask event to server with the full updated task
-      socketService.updateTask(updatedTask);
-
-      useNotificationStore.getState().addNotification({ type: 'success', message: 'Comment added' });
-
-    } catch (error) { // Catch potential synchronous errors
-      console.error('Error adding comment via socket:', error);
-      // Revert optimistic update
-      set({ tasks: originalTasks });
-      taskCache.setTasks(originalTasks);
-      useNotificationStore.getState().addNotification({
-        type: 'error',
-        message: 'Failed to add comment'
-      });
-    }
-  },
-
-  // Collaborator/Attachment changes also need to emit task updates
-  addCollaborator: async (taskId: string, userEmail: string, role: 'viewer' | 'editor') => {
-    const originalTasks = get().tasks;
-    const taskToUpdate = originalTasks.find(t => t.id === taskId);
-    if (!taskToUpdate) return;
-
-    const collaborator = {
-      id: crypto.randomUUID(),
-      userId: crypto.randomUUID(), // Placeholder ID
-      userEmail,
-      role,
-      createdAt: new Date().toISOString()
-    };
-    const updatedTask = {
-      ...taskToUpdate,
-      collaborators: [...(taskToUpdate.collaborators || []), collaborator]
-    };
-
-    try {
-      // Optimistic update
-      set({ tasks: originalTasks.map(t => t.id === taskId ? updatedTask : t) });
-      taskCache.setTasks(get().tasks);
-
-      // Emit update to server
-      socketService.updateTask(updatedTask);
-
-    } catch (error) { // This catch might not be effective for socket errors
-      console.error('Error adding collaborator via socket:', error);
-      // Revert optimistic update
-      set({ tasks: originalTasks });
-      taskCache.setTasks(originalTasks);
-
-      useNotificationStore.getState().addNotification({
-        type: 'error',
-        message: 'Failed to add collaborator'
-      });
-    }
-  },
-
-  removeCollaborator: async (taskId: string, collaboratorId: string) => {
-    const originalTasks = get().tasks;
-    const taskToUpdate = originalTasks.find(t => t.id === taskId);
-    if (!taskToUpdate) return;
-
-     const updatedTask = {
-       ...taskToUpdate,
-       collaborators: (taskToUpdate.collaborators || []).filter(c => c.id !== collaboratorId)
-     };
-
-    try {
-      // Optimistic update
-      set({ tasks: originalTasks.map(t => t.id === taskId ? updatedTask : t) });
-      taskCache.setTasks(get().tasks);
-
-      // Emit update to server
-      socketService.updateTask(updatedTask);
-
-    } catch (error) { // This catch might not be effective for socket errors
-      console.error('Error removing collaborator via socket:', error);
-      // Revert optimistic update
-      set({ tasks: originalTasks });
-      taskCache.setTasks(originalTasks);
-
-      useNotificationStore.getState().addNotification({
-        type: 'error',
-        message: 'Failed to remove collaborator'
-      });
+      rescheduleTaskNotification(taskToUpdate); // Reschedule based on original state
+      useNotificationStore.getState().addNotification({ type: 'error', message: 'Failed to update task.' });
     }
   },
 
@@ -337,85 +348,128 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       tags: [...new Set([...state.tags, tag])],
     })),
 
-  // syncWithDrive is no longer needed as primary mechanism
-  syncWithDrive: async () => {
-     console.warn("syncWithDrive called, but task synchronization is now handled by Socket.IO events.");
-     // Optionally, could perform a manual fetch/sync if needed for recovery,
-     // but primary updates should go through socketService.
-     // Example: Trigger initial sync on demand?
-     // const auth = useAuthStore.getState();
-     // if (auth.isAuthenticated && auth.user && auth.accessToken) {
-     //   socketService.initialize(); // Re-emit authenticate to trigger sync
-     // }
-  },
-
-  uploadAttachment: async (taskId: string, file: File) => {
-    const googleDrive = useAuthStore.getState().googleDrive; // Still need drive service for file ops
-    if (!googleDrive) return;
+  uploadAttachment: async (taskId, file) => {
+    const { accessToken } = useAuthStore.getState();
+    const { cloudTaskFolderId } = get();
+    if (!accessToken || !cloudTaskFolderId) {
+        useNotificationStore.getState().addNotification({ type: 'error', message: 'Cannot upload: Drive not initialized.' });
+        return;
+    }
 
     const originalTasks = get().tasks;
     const taskToUpdate = originalTasks.find(t => t.id === taskId);
-    if (!taskToUpdate) return;
+    if (!taskToUpdate) {
+        useNotificationStore.getState().addNotification({ type: 'error', message: 'Cannot upload: Task not found.' });
+        return;
+    }
+
+    const fileType = file.type || mime.lookup(file.name) || 'application/octet-stream';
+    const attachmentFolderType = getAttachmentFolder(fileType); // e.g., AUDIO_FOLDER_NAME
+
+    // Map the type string to the actual folder name constant
+    const folderNameMap: { [key: string]: string } = {
+        [AUDIO_FOLDER_NAME]: AUDIO_FOLDER_NAME,
+        [VIDEO_FOLDER_NAME]: VIDEO_FOLDER_NAME,
+        [DOCUMENT_FOLDER_NAME]: DOCUMENT_FOLDER_NAME,
+        [PICTURE_FOLDER_NAME]: PICTURE_FOLDER_NAME,
+    };
+    const attachmentFolderName = folderNameMap[attachmentFolderType];
+
+    if (!attachmentFolderName) {
+        console.error(`Invalid attachment folder type determined: ${attachmentFolderType}`);
+        useNotificationStore.getState().addNotification({ type: 'error', message: 'Could not determine attachment category.' });
+        return;
+    }
 
     try {
-      const attachment = await googleDrive.uploadFile(file, taskId); // Direct Drive API call for file
-      if (attachment) {
-        const updatedTask = {
-          ...taskToUpdate,
-          attachments: [...(taskToUpdate.attachments || []), attachment]
+        useNotificationStore.getState().addNotification({ type: 'info', message: `Uploading ${file.name}...` });
+
+        // 1. Find/Create the specific attachment subfolder (e.g., AUDIOS)
+        const attachmentFolderId = await getOrCreateFolder(accessToken, attachmentFolderName, cloudTaskFolderId);
+        if (!attachmentFolderId) {
+            throw new Error(`Failed to get or create attachment folder '${attachmentFolderName}'.`);
+        }
+
+        // 2. Upload the file to that subfolder
+        const uploadResult = await driveUploadAttachment(accessToken, file, attachmentFolderId);
+        if (!uploadResult) {
+            throw new Error('File upload to Google Drive failed.');
+        }
+        const { id: attachmentDriveId, webViewLink } = uploadResult;
+
+        // 3. Update the task JSON file in Drive to include the new attachment ID
+        // Corrected: Use attachmentFolderType here
+        const attachmentKey = `${attachmentFolderType.toLowerCase()}s` as keyof TaskData['attachments']; // e.g., 'audios', 'videos'
+        const updatedAttachmentList = [...(taskToUpdate.attachments[attachmentKey] || []), attachmentDriveId];
+        const taskUpdatePayload = {
+            attachments: {
+                ...taskToUpdate.attachments,
+                [attachmentKey]: updatedAttachmentList,
+            }
         };
 
-        // Optimistic update
-        set({ tasks: originalTasks.map(t => t.id === taskId ? updatedTask : t) });
-        taskCache.setTasks(get().tasks);
+        const driveUpdateResult = await driveUpdateTask(accessToken, taskId, taskUpdatePayload);
+        if (!driveUpdateResult) {
+            // Attempt to delete the orphaned attachment? Difficult to handle reliably. Log error.
+            console.error(`Failed to update task JSON for task ${taskId} after uploading attachment ${attachmentDriveId}. Attachment may be orphaned.`);
+            throw new Error('Failed to update task metadata after upload.');
+        }
 
-        // Emit task update to server
-        socketService.updateTask(updatedTask);
-      } else {
-         throw new Error("File upload failed in Google Drive service.");
-      }
+        // 4. Update local state (tasks and uiAttachments)
+        const newUIAttachment: UIAttachment = {
+            driveFileId: attachmentDriveId,
+            name: file.name,
+            // Corrected: Use attachmentFolderType here
+            type: attachmentFolderType.toLowerCase() as UIAttachment['type'],
+            webViewLink: webViewLink
+        };
+
+        set((state) => {
+            const currentTask = state.tasks.find(t => t.id === taskId);
+            if (!currentTask) return {}; // Should not happen
+
+            const updatedTaskState = {
+                ...currentTask,
+                ...driveUpdateResult // Use confirmed data from Drive update
+            };
+            const updatedUIAttachments = [...(state.uiAttachments[taskId] || []), newUIAttachment];
+
+            return {
+                tasks: state.tasks.map(t => t.id === taskId ? updatedTaskState : t),
+                uiAttachments: { ...state.uiAttachments, [taskId]: updatedUIAttachments }
+            };
+        });
+        taskCache.setTasks(get().tasks); // Update cache
+
+        useNotificationStore.getState().addNotification({ type: 'success', message: `Attachment "${file.name}" uploaded.` });
+
     } catch (error) {
       console.error('Error uploading attachment:', error);
-       // No state reversal needed here as the file upload itself failed before state change
-      useNotificationStore.getState().addNotification({
-        type: 'error',
-        message: 'Failed to upload file'
-      });
+      useNotificationStore.getState().addNotification({ type: 'error', message: `Failed to upload attachment: ${error instanceof Error ? error.message : 'Unknown error'}` });
     }
   },
 
-  deleteAttachment: async (taskId: string, attachmentId: string) => {
-    const googleDrive = useAuthStore.getState().googleDrive; // Still need drive service for file ops
-    if (!googleDrive) return;
-
-    const originalTasks = get().tasks;
-    const taskToUpdate = originalTasks.find(t => t.id === taskId);
-    if (!taskToUpdate) return;
-
-    try {
-      const success = await googleDrive.deleteFile(attachmentId); // Direct Drive API call for file
-      if (success) {
-         const updatedTask = {
-           ...taskToUpdate,
-           attachments: (taskToUpdate.attachments || []).filter(a => a.id !== attachmentId)
-         };
-
-        // Optimistic update
-        set({ tasks: originalTasks.map(t => t.id === taskId ? updatedTask : t) });
-        taskCache.setTasks(get().tasks);
-
-        // Emit task update to server
-        socketService.updateTask(updatedTask);
-      } else {
-         throw new Error("File deletion failed in Google Drive service.");
-      }
-    } catch (error) {
-      console.error('Error deleting attachment:', error);
-       // No state reversal needed here as the file deletion itself failed before state change
-      useNotificationStore.getState().addNotification({
-        type: 'error',
-        message: 'Failed to delete attachment'
-      });
-    }
-  },
+  // deleteAttachment: async (taskId: string, attachmentId: string) => {
+  //   // Implementation requires driveDeleteFile function and updating task JSON
+  // },
 }));
+
+// Automatically initialize Drive when user logs in
+// Need to subscribe to auth store changes
+useAuthStore.subscribe(
+  (state, prevState) => {
+    // Check if authentication status changed to true
+    if (state.isAuthenticated && !prevState.isAuthenticated) {
+      console.log('Auth state changed to authenticated, initializing Drive...');
+      // Use setTimeout to ensure access token is likely available after rehydration/callback
+      setTimeout(() => {
+        useTaskStore.getState().initializeDrive();
+      }, 100); // Small delay
+    }
+    // Check if authentication status changed to false (logout)
+    else if (!state.isAuthenticated && prevState.isAuthenticated) {
+      console.log('Auth state changed to logged out, clearing tasks...');
+      useTaskStore.getState().clearTasks();
+    }
+  }
+);

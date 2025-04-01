@@ -15,7 +15,8 @@ import { Cloud, ListTodo, Lock, CheckCircle } from 'lucide-react';
 import { SidebarProvider } from '@/lib/sidebar-context'; // Corrected import path
 
 function App() {
-  const { isAuthenticated, accessToken, user, reloadTasks } = useAuthStore();
+  // Remove reloadTasks from destructuring
+  const { isAuthenticated, accessToken, user } = useAuthStore();
   const { settings } = useSettingsStore();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null); // State for selected task
 
@@ -32,12 +33,14 @@ function App() {
     }
   }, [isAuthenticated, accessToken, user]);
 
-  // Reload tasks when authenticated
+  // Remove the useEffect hook that called reloadTasks
+  /*
   useEffect(() => {
     if (isAuthenticated && accessToken) {
-      reloadTasks();
+      reloadTasks(); // This function no longer exists
     }
   }, [isAuthenticated, accessToken]);
+  */
 
   // Request notification permission on mount
   useEffect(() => {

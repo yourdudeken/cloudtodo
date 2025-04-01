@@ -1,70 +1,39 @@
 import React from 'react';
-import { useGoogleLogin } from '@react-oauth/google';
+import { useGoogleLogin } from '@react-oauth/google'; // Re-import useGoogleLogin
 import { useAuthStore } from '@/store/auth';
+import { useNotificationStore } from '@/store/notifications'; // Import notification store
 import { Button } from '@/components/ui/button';
-import { LogIn, LogOut, Shield } from 'lucide-react';
-import * as Dialog from '@radix-ui/react-dialog';
+import { LogIn, LogOut } from 'lucide-react';
+// Remove Shield, Dialog imports if 2FA is not being re-added
 
 export function AuthButton() {
-  const { isAuthenticated, twoFactorPending, login, logout, verifyTwoFactor } = useAuthStore();
-  const [verificationCode, setVerificationCode] = React.useState('');
-  const [isVerifying, setIsVerifying] = React.useState(false);
+  // Use loginSuccess instead of login. Add isLoadingProfile.
+  const { isAuthenticated, loginSuccess, logout, isLoggingIn, isLoadingProfile } = useAuthStore();
 
+  // Re-introduce useGoogleLogin hook
   const googleLogin = useGoogleLogin({
-    onSuccess: login,
-    scope: 'https://www.googleapis.com/auth/drive.file',
-    flow: 'implicit',
-    ux_mode: 'popup',
-  });
+    onSuccess: loginSuccess, // Call loginSuccess from the store
+    onError: (error) => {
+      console.error('Google Login Error:', error);
+      // Optionally trigger a notification via the store
+      useNotificationStore.getState().addNotification({
+         type: 'error',
+          message: 'Google Sign-In failed. Please try again.'
+       });
+     },
+     // Explicitly request necessary scopes, including drive.file
+     scope: 'openid email profile https://www.googleapis.com/auth/drive.file',
+     // Force consent screen to ensure permissions are re-granted
+     prompt: 'consent',
+     flow: 'implicit',
+   });
 
-  const handleVerifyCode = async () => {
-    setIsVerifying(true);
-    try {
-      const success = await verifyTwoFactor(verificationCode);
-      if (!success) {
-        setVerificationCode('');
-      }
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
-  if (twoFactorPending) {
-    return (
-      <Dialog.Root open={true}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-          <Dialog.Content className="fixed left-[50%] top-[50%] max-h-[85vh] w-[90vw] max-w-[400px] translate-x-[-50%] translate-y-[-50%] rounded-lg bg-white p-6 shadow-lg">
-            <div className="flex flex-col items-center gap-4">
-              <Shield className="h-12 w-12 text-blue-600" />
-              <h2 className="text-xl font-semibold">Two-Factor Authentication</h2>
-              <p className="text-center text-gray-600">
-                Please enter the verification code sent to your email
-              </p>
-              <input
-                type="text"
-                value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value)}
-                placeholder="Enter code"
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <Button 
-                onClick={handleVerifyCode}
-                disabled={!verificationCode || isVerifying}
-                className="w-full"
-              >
-                {isVerifying ? 'Verifying...' : 'Verify Code'}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-    );
-  }
+  // Determine overall loading state
+  const isLoading = isLoggingIn || isLoadingProfile;
 
   if (isAuthenticated) {
     return (
-      <Button variant="ghost" onClick={logout}>
+      <Button variant="ghost" onClick={logout} disabled={isLoading}>
         <LogOut className="mr-2 h-4 w-4" />
         Sign Out
       </Button>
@@ -73,12 +42,15 @@ export function AuthButton() {
 
   return (
     <Button
+      // Trigger the hook function
       onClick={() => googleLogin()}
+      // Disable button during login process or profile fetch
+      disabled={isLoading}
       size="lg"
-      className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-lg px-10 py-6 h-auto rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+      className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-lg px-10 py-6 h-auto rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
     >
       <LogIn className="mr-3 h-5 w-5" />
-      Connect with Google Drive
+      {isLoading ? 'Connecting...' : 'Connect with Google Drive'}
     </Button>
   );
 }

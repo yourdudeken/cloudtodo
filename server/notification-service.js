@@ -46,19 +46,21 @@ try {
     const clientSecret = process.env.VITE_CLIENT_SECRET;
     const redirectUri = process.env.VITE_REDIRECT_URI;
     const refreshToken = process.env.VITE_REFRESH_TOKEN;
-    const encryptionKey = process.env.VITE_ENCRYPTION_KEY;
+    // Remove encryptionKey check
+    // const encryptionKey = process.env.VITE_ENCRYPTION_KEY;
 
-    if (!clientId || !clientSecret || !redirectUri || !refreshToken || !encryptionKey) {
-        console.error("Missing Google Drive credentials or Encryption Key for Notification Service.");
+    // Remove encryptionKey from check
+    if (!clientId || !clientSecret || !redirectUri || !refreshToken) {
+        console.error("Missing Google Drive credentials for Notification Service.");
     } else {
         googleDriveService = new GoogleDriveService({
             clientId,
             clientSecret,
             redirectUri,
             refreshToken,
-            encryptionKey
+            // encryptionKey // Removed
         });
-        console.log("Google Drive Service initialized for Notification Service.");
+        console.log("Google Drive Service initialized for Notification Service (without encryption).");
     }
 } catch (error) {
     console.error("Failed to initialize Google Drive Service for notifications:", error);
