@@ -28,6 +28,14 @@ import {
   scheduleNotificationsForTasks, // Keep for initial load
   clearAllScheduledNotifications, // Keep for logout/disconnect
 } from '@/lib/browser-notifications';
+// Import due time trigger functions
+import {
+  scheduleDueTimeTrigger,
+  cancelDueTimeTrigger,
+  rescheduleDueTimeTrigger,
+  scheduleDueTimeTriggersForTasks,
+  clearAllDueTimeTriggers,
+} from '@/lib/due-time-trigger';
 import mime from 'mime-types'; // Needed for determining attachment folder
 
 // --- Align Task interface with TaskData ---
@@ -87,8 +95,18 @@ interface TaskState {
   updateTask: (id: string, taskUpdateData: Partial<Omit<TaskData, 'id' | 'createdDate' | 'updatedDate'>>) => Promise<void>; // Adjusted input type
   addCategory: (category: string) => void;
   addTag: (tag: string) => void;
+  addComment: (taskId: string, content: string) => Promise<void>; // Add back addComment
   uploadAttachment: (taskId: string, file: File) => Promise<void>; // ID is Drive File ID
   clearTasks: () => void; // Function to clear tasks on logout
+}
+
+// Define Comment type locally (matching TaskData.comments structure)
+interface Comment {
+    id: string;
+    userId: string;
+    userEmail: string;
+    content: string;
+    createdAt: string; // ISO 8601 format
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -103,6 +121,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     set({ tasks: [], uiAttachments: {}, cloudTaskFolderId: null, isLoading: false });
     taskCache.clear();
     clearAllScheduledNotifications();
+    clearAllDueTimeTriggers(); // Also clear due time triggers
     console.log('Task store cleared.');
   },
 
@@ -162,9 +181,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         }
       }
 
-      set({ tasks, uiAttachments: uiAttachmentsMap, isLoading: false });
+      set({ tasks, uiAttachments: uiAttachmentsMap }); // isLoading is handled in finally
       taskCache.setTasks(tasks); // Update cache
-      scheduleNotificationsForTasks(tasks); // Schedule browser notifications
+      scheduleNotificationsForTasks(tasks); // Schedule browser REMINDERS
+      scheduleDueTimeTriggersForTasks(tasks); // Schedule due time EMAIL TRIGGERS
       useNotificationStore.getState().addNotification({ type: 'success', message: 'Tasks loaded from Google Drive.' });
       console.log(`Loaded ${tasks.length} tasks.`);
 
@@ -210,7 +230,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           uiAttachments: { ...state.uiAttachments, [newFileId]: [] } // Initialize empty UI attachments
         }));
         taskCache.setTasks(get().tasks);
-        scheduleTaskNotification(newTask);
+        scheduleTaskNotification(newTask); // Schedule browser reminder
+        scheduleDueTimeTrigger(newTask); // Schedule due time email trigger
         useNotificationStore.getState().addNotification({ type: 'success', message: `Task "${newTask.taskTitle}" added.` });
         return newFileId; // Return the new ID on success
       } else {
@@ -251,14 +272,18 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           tasks: state.tasks.map(t => t.id === id ? { ...t, ...driveUpdateResult } : t)
       }));
       taskCache.setTasks(get().tasks);
-      rescheduleTaskNotification(get().tasks.find(t => t.id === id)!); // Reschedule notification
+      const finalUpdatedTask = get().tasks.find(t => t.id === id)!;
+      rescheduleTaskNotification(finalUpdatedTask); // Reschedule browser reminder
+      rescheduleDueTimeTrigger(finalUpdatedTask); // Reschedule due time email trigger
 
     } catch (error) {
       console.error('Error toggling task status:', error);
       // Revert optimistic update
       set({ tasks: originalTasks });
       taskCache.setTasks(originalTasks);
-      rescheduleTaskNotification(task); // Reschedule based on original state
+      // Reschedule based on original state if update failed
+      rescheduleTaskNotification(task);
+      rescheduleDueTimeTrigger(task);
       useNotificationStore.getState().addNotification({ type: 'error', message: 'Failed to update task status.' });
     }
   },
@@ -278,7 +303,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           uiAttachments: Object.fromEntries(Object.entries(get().uiAttachments).filter(([taskId]) => taskId !== id))
       });
       taskCache.setTasks(get().tasks);
-      cancelTaskNotification(id); // Cancel notification
+      cancelTaskNotification(id); // Cancel browser reminder
+      cancelDueTimeTrigger(id); // Cancel due time email trigger
 
       // Delete from Drive
       const success = await driveDeleteTask(accessToken, id);
@@ -294,7 +320,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       // Revert optimistic update only if Drive call truly failed (not just 404)
       set({ tasks: originalTasks, uiAttachments: get().uiAttachments }); // Revert fully might be complex, consider just logging
       taskCache.setTasks(originalTasks);
-      scheduleTaskNotification(taskToDelete); // Reschedule notification
+      // Reschedule based on original state if delete failed
+      scheduleTaskNotification(taskToDelete);
+      scheduleDueTimeTrigger(taskToDelete);
       useNotificationStore.getState().addNotification({ type: 'error', message: 'Failed to delete task.' });
     }
   },
@@ -326,15 +354,72 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           tasks: state.tasks.map(t => t.id === id ? { ...t, ...driveUpdateResult } : t)
       }));
       taskCache.setTasks(get().tasks);
-      rescheduleTaskNotification(get().tasks.find(t => t.id === id)!); // Reschedule notification
+      const finalUpdatedTask = get().tasks.find(t => t.id === id)!;
+      rescheduleTaskNotification(finalUpdatedTask); // Reschedule browser reminder
+      rescheduleDueTimeTrigger(finalUpdatedTask); // Reschedule due time email trigger
 
     } catch (error) {
       console.error('Error updating task:', error);
       // Revert optimistic update
       set({ tasks: originalTasks });
       taskCache.setTasks(originalTasks);
-      rescheduleTaskNotification(taskToUpdate); // Reschedule based on original state
+      // Reschedule based on original state if update failed
+      rescheduleTaskNotification(taskToUpdate);
+      rescheduleDueTimeTrigger(taskToUpdate);
       useNotificationStore.getState().addNotification({ type: 'error', message: 'Failed to update task.' });
+    }
+  },
+
+  addComment: async (taskId, content) => {
+    const { accessToken, user } = useAuthStore.getState();
+    if (!accessToken || !user) {
+      useNotificationStore.getState().addNotification({ type: 'error', message: 'You must be logged in to comment.' });
+      return;
+    }
+
+    const originalTasks = get().tasks;
+    const taskToUpdate = originalTasks.find(t => t.id === taskId);
+    if (!taskToUpdate) {
+      useNotificationStore.getState().addNotification({ type: 'error', message: 'Task not found.' });
+      return;
+    }
+
+    const newComment: Comment = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      userEmail: user.email,
+      content: content,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedComments = [...(taskToUpdate.comments || []), newComment];
+    const optimisticUpdate = { ...taskToUpdate, comments: updatedComments };
+    const driveUpdatePayload = { comments: updatedComments }; // Only send comments in update
+
+    try {
+      // Optimistic update
+      set({ tasks: originalTasks.map(t => t.id === taskId ? optimisticUpdate : t) });
+      taskCache.setTasks(get().tasks); // Update cache if comments are cached
+
+      // Update in Drive
+      const driveUpdateResult = await driveUpdateTask(accessToken, taskId, driveUpdatePayload);
+      if (!driveUpdateResult) {
+        throw new Error('Google Drive update failed when adding comment.');
+      }
+
+      // Update state again with confirmed data from Drive (includes updatedDate)
+      set((state) => ({
+        tasks: state.tasks.map(t => t.id === taskId ? { ...t, ...driveUpdateResult } : t)
+      }));
+      taskCache.setTasks(get().tasks); // Update cache again
+      useNotificationStore.getState().addNotification({ type: 'success', message: 'Comment added.' });
+
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      // Revert optimistic update
+      set({ tasks: originalTasks });
+      taskCache.setTasks(originalTasks);
+      useNotificationStore.getState().addNotification({ type: 'error', message: 'Failed to add comment.' });
     }
   },
 

@@ -1,30 +1,37 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Button } from '@/components/ui/button';
-import { useTaskStore, Task } from '@/store/tasks'; // Import Task from store
-import { FileAttachment, TaskComment } from '@/lib/google-drive'; // Import needed types
+import { useTaskStore, Task, UIAttachment } from '@/store/tasks'; // Import Task (TaskData) and UIAttachment
+// Removed FileAttachment, TaskComment imports from google-drive
 import {
   Calendar,
   Clock,
-  Tag, 
-  Battery as Category, 
+  Tag,
+  Battery as Category,
   Star,
   Pin,
   Flag,
-  FileIcon,
+  FileIcon, // Keep for default icon
   Download,
-  Trash2,
+  // Trash2, // Removed Trash2
   X,
-  Users,
-  MessageSquare,
+  // Users, // Removed Users (CollaborateDialog removed)
+  // MessageSquare, // Removed MessageSquare (not used)
   Edit2,
-  Send // Added Send icon
+  Send
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns'; // Import parseISO
 import { EditTaskDialog } from './edit-task-dialog';
-// CollaborateDialog is no longer needed here
-// import { CollaborateDialog } from './collaborate-dialog'; 
-import mime from 'mime-types';
+// Removed CollaborateDialog import
+
+// Define Comment type locally (matching TaskData.comments structure)
+interface TaskComment {
+    id: string;
+    userId: string;
+    userEmail: string;
+    content: string;
+    createdAt: string; // ISO 8601 format
+}
 
 interface TaskDetailProps {
   taskId: string;
@@ -32,33 +39,34 @@ interface TaskDetailProps {
 }
 
 export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
-  // Explicitly type the task variable or ensure find returns Task | undefined
   const task: Task | undefined = useTaskStore((state) => state.tasks.find(t => t.id === taskId));
-  const addComment = useTaskStore((state) => state.addComment); // Get addComment action
+  // Get UI attachments map for this task
+  const uiAttachments = useTaskStore((state) => state.uiAttachments[taskId] || []);
+  const addComment = useTaskStore((state) => state.addComment);
   const [showEditDialog, setShowEditDialog] = React.useState(false);
-  // const [showCollaborateDialog, setShowCollaborateDialog] = React.useState(false); // No longer needed
-  const deleteAttachment = useTaskStore((state) => state.deleteAttachment);
-  const [newComment, setNewComment] = React.useState(''); // State for new comment input
+  // Removed deleteAttachment call
+  // const deleteAttachment = useTaskStore((state) => state.deleteAttachment);
+  const [newComment, setNewComment] = React.useState('');
 
-  if (!task) return null;
+  if (!task || !task.id) return null; // Ensure task and task.id exist
 
-  const priorityColors: { [key: number]: string } = { // Add index signature
+  const priorityColors: { [key: number]: string } = {
     1: 'text-red-500',
     2: 'text-orange-500',
     3: 'text-blue-500',
     4: 'text-gray-500',
   };
 
-  // Updated getAttachmentIcon to handle potentially missing or non-string mimeType
-  const getAttachmentIcon = (mimeType: string | null | undefined) => {
-    if (typeof mimeType !== 'string' || !mimeType) {
-       return FileIcon; // Default icon if mimeType is missing or not a string
-    }
-    // Using FileIcon for all for simplicity now, but could be expanded
-    if (mimeType.startsWith('image/')) return FileIcon;
-    if (mimeType.startsWith('audio/')) return FileIcon;
-    if (mimeType.startsWith('text/') || mimeType.includes('document')) return FileIcon;
+  // Simplified icon logic - always use FileIcon for now
+  const getAttachmentIcon = (_mimeType: string | null | undefined) => {
     return FileIcon;
+  };
+
+  const handleAddComment = () => {
+      if (newComment.trim() && task.id) {
+          addComment(task.id, newComment.trim());
+          setNewComment(''); // Clear input after adding
+      }
   };
 
   return (
@@ -69,7 +77,8 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
           <div className="flex items-start justify-between mb-6">
             <div className="flex-1">
               <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-semibold dark:text-white">{task.title}</h2>
+                {/* Use taskTitle */}
+                <h2 className="text-2xl font-semibold dark:text-white">{task.taskTitle}</h2>
                 {task.isPinned && <Pin className="h-5 w-5 text-gray-500 dark:text-gray-400" />}
                 {task.isStarred && <Star className="h-5 w-5 text-yellow-400 fill-current" />}
               </div>
@@ -82,12 +91,12 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
                 variant="ghost"
                 size="icon"
                 onClick={() => setShowEditDialog(true)}
-                aria-label="Edit Task" // Add aria-label
+                aria-label="Edit Task"
               >
                 <Edit2 className="h-5 w-5" />
               </Button>
               <Dialog.Close asChild>
-                <Button variant="ghost" size="icon" aria-label="Close Task Detail"> {/* Add aria-label */}
+                <Button variant="ghost" size="icon" aria-label="Close Task Detail">
                   <X className="h-5 w-5" />
                 </Button>
               </Dialog.Close>
@@ -101,7 +110,8 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
                 <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                   <Calendar className="h-5 w-5" />
                   <div>
-                    {task.dueDate && format(new Date(task.dueDate), 'MMMM d, yyyy')} {/* Ensure dueDate is Date object or string */}
+                    {/* Use parseISO for date string */}
+                    {task.dueDate && format(parseISO(task.dueDate), 'MMMM d, yyyy')}
                     {task.dueTime && ` at ${task.dueTime}`}
                   </div>
                 </div>
@@ -117,7 +127,8 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
 
               {/* Priority */}
               <div className="flex items-center gap-2">
-                <Flag className={`h-5 w-5 ${priorityColors[task.priority]}`} />
+                 {/* Handle potentially undefined priority */}
+                <Flag className={`h-5 w-5 ${priorityColors[task.priority ?? 4]}`} />
                 <span className="text-gray-600 dark:text-gray-400">
                   Priority: {
                     task.priority === 1 ? 'Urgent' :
@@ -130,17 +141,19 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
 
               {/* Category & Tags */}
               <div className="space-y-2">
-                {task.category && (
+                 {/* Use categories array */}
+                {task.categories && task.categories.length > 0 && (
                   <div className="flex items-center gap-2">
                     <Category className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                    {/* Display first category or map all */}
                     <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-700 dark:text-gray-200">
-                      {task.category}
+                      {task.categories[0]}
                     </span>
                   </div>
                 )}
                 {task.tags && task.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2">
-                    {task.tags.map((tag: string) => ( // Add type annotation for tag
+                    {task.tags.map((tag: string) => (
                       <div
                         key={tag}
                         className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-2 py-1 rounded"
@@ -154,54 +167,59 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
               </div>
 
               {/* Recurrence */}
-              {task.recurrence && (
+              {task.recurrence && task.recurrence !== "None" && (
                 <div className="text-gray-600 dark:text-gray-400">
                   <h3 className="font-medium mb-2 dark:text-gray-100">Recurrence</h3>
-                  <p>
-                    Repeats {task.recurrence.frequency}
-                    {task.recurrence.interval > 1 && ` every ${task.recurrence.interval} ${task.recurrence.frequency}s`}
-                  </p>
+                   {/* Attempt to parse recurrence string if it's JSON */}
+                   {(() => {
+                       try {
+                           const rec = JSON.parse(task.recurrence!);
+                           return (
+                               <p>
+                                   Repeats {rec.frequency}
+                                   {rec.interval > 1 && ` every ${rec.interval} ${rec.frequency}s`}
+                                   {rec.endDate && ` until ${format(parseISO(rec.endDate), 'MMM d, yyyy')}`}
+                               </p>
+                           );
+                       } catch (e) {
+                           // If parsing fails, display the raw string
+                           return <p>Repeats: {task.recurrence}</p>;
+                       }
+                   })()}
                 </div>
               )}
             </div>
 
             <div className="space-y-6">
-              {/* Attachments */}
-              {task.attachments && task.attachments.length > 0 && (
+              {/* Attachments - Use UIAttachments from store */}
+              {uiAttachments.length > 0 && (
                 <div>
                   <h3 className="font-medium mb-3 dark:text-gray-100">Attachments</h3>
                   <div className="space-y-2">
-                    {task.attachments.map((attachment: FileAttachment) => { // Add type annotation for attachment
-                      // Add safety check before rendering attachment details
-                      if (!attachment || !attachment.id || !attachment.name) {
-                        console.warn("Skipping rendering attachment due to missing essential data:", attachment);
-                        return null;
-                      }
-                      const Icon = getAttachmentIcon(attachment.mimeType); // Already handles missing mimeType
+                    {uiAttachments.map((attachment: UIAttachment) => {
+                      const Icon = getAttachmentIcon(null); // Use default icon for now
                       return (
                         <div
-                          key={attachment.id}
+                          key={attachment.driveFileId}
                           className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 p-3 rounded"
                         >
                           <Icon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                           <span className="flex-1 truncate">{attachment.name}</span>
                           <div className="flex items-center gap-1">
-                            <a
-                              href={attachment.downloadUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
-                              aria-label={`Download ${attachment.name}`} // Add aria-label
-                            >
-                              <Download className="h-4 w-4" />
-                            </a>
-                            <button
-                              onClick={() => deleteAttachment(task.id, attachment.id)}
-                              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-red-500"
-                              aria-label={`Delete attachment ${attachment.name}`} // Add aria-label
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {/* Use webViewLink if available */}
+                            {attachment.webViewLink && (
+                                <a
+                                  href={attachment.webViewLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                                  aria-label={`View ${attachment.name}`}
+                                >
+                                  <Download className="h-4 w-4" /> {/* Using Download icon as placeholder */}
+                                </a>
+                            )}
+                            {/* Remove delete button */}
+                            {/* <button ... onClick={() => deleteAttachment(task.id!, attachment.driveFileId)} ...> */}
                           </div>
                         </div>
                       );
@@ -213,22 +231,20 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
               {/* Comments Section */}
               <div>
                 <h3 className="font-medium mb-3 dark:text-gray-100">Comments</h3>
-                <div className="space-y-3 max-h-40 overflow-y-auto pr-2 mb-4"> {/* Added max-height and scroll */}
-                  {/* Ensure comments exist and is an array before mapping */}
+                <div className="space-y-3 max-h-40 overflow-y-auto pr-2 mb-4">
+                  {/* Use task.comments array */}
                   {task.comments && Array.isArray(task.comments) && task.comments.length > 0 ? (
-                    task.comments.map((comment: TaskComment) => ( // Add type annotation for comment
+                    task.comments.map((comment: TaskComment) => (
                       <div key={comment.id} className="bg-gray-50 dark:bg-gray-700 p-3 rounded">
                         <div className="flex items-center gap-2 mb-1">
-                          {/* Optionally display user info if available, otherwise just timestamp */}
-                          {/* <MessageSquare className="h-4 w-4 text-gray-500 dark:text-gray-400" /> */}
-                          {/* <span className="text-sm font-medium dark:text-gray-200">
-                            {comment.userEmail || comment.userId || 'User'} 
-                          </span> */}
+                          <span className="text-sm font-medium dark:text-gray-200">
+                            {comment.userEmail || 'User'} {/* Display email */}
+                          </span>
                           <span className="text-xs text-gray-500 dark:text-gray-400">
-                            {format(new Date(comment.createdAt), 'MMM d, h:mm a')} {/* Use createdAt */}
+                            {format(parseISO(comment.createdAt), 'MMM d, h:mm a')} {/* Use parseISO */}
                           </span>
                         </div>
-                        <p className="text-gray-600 dark:text-gray-300">{comment.content}</p> {/* Use content */}
+                        <p className="text-gray-600 dark:text-gray-300">{comment.content}</p>
                       </div>
                     ))
                   ) : (
@@ -247,13 +263,8 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
                   />
                   <Button
                     type="button"
-                    onClick={() => {
-                      if (newComment.trim()) {
-                        addComment(task.id, newComment.trim());
-                        setNewComment(''); // Clear input after adding
-                      }
-                    }}
-                    disabled={!newComment.trim()} // Disable if input is empty
+                    onClick={handleAddComment} // Use handler function
+                    disabled={!newComment.trim()}
                     aria-label="Add Comment"
                   >
                     <Send className="h-4 w-4" />
@@ -265,7 +276,7 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
           </div>
 
           {/* Render EditTaskDialog conditionally */}
-          {showEditDialog && (
+          {showEditDialog && task.id && ( // Ensure task.id exists
             <EditTaskDialog
               taskId={task.id}
               onClose={() => setShowEditDialog(false)}

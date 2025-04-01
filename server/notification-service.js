@@ -67,23 +67,24 @@ try {
 }
 
 
-// --- Notification Service Class ---
+// --- Notification Service Class (Now mostly placeholder) ---
 class NotificationService {
   constructor() {
-    // Schedule checks only if Drive service is available
-    // Email sending depends on transporter AND finding email (which is now removed)
-    if (googleDriveService) {
-      this.scheduleEmailChecks();
-    } else {
-      console.log('Email notifications disabled due to missing Google Drive configuration.');
-    }
+    // Remove scheduling logic - it's now client-triggered
+    // if (googleDriveService) {
+    //   this.scheduleEmailChecks();
+    // } else {
+    //   console.log('Email notifications disabled due to missing Google Drive configuration.');
+    // }
+    console.log('NotificationService initialized (server-side checks disabled).');
   }
 
-  // --- Email Notifications (Now requires email to be passed or found differently) ---
-
+  // --- Email Notifications (Functionality moved to API endpoint in server/index.js) ---
+  // Keep the function signature for potential future use or direct calls if needed,
+  // but the primary logic is now in the API endpoint.
   async sendEmailNotification(to, task, type) {
     if (!transporter) {
-      console.log('Email transporter not configured. Skipping email notification.');
+      console.warn('[NotificationService] sendEmailNotification called, but transporter not configured.');
       return;
     }
     if (!to) {
@@ -131,88 +132,25 @@ class NotificationService {
       let info = await transporter.sendMail(mailOptions);
       console.log(`Email notification (${type}) sent to ${to} for task "${task.title}": ${info.messageId}`);
     } catch (error) {
-      console.error(`Error sending ${type} email to ${to} for task "${task.title}":`, error);
+      console.error(`[NotificationService] Error sending ${type} email to ${to} for task "${task.title}":`, error);
     }
   }
 
+  // Remove checkDueTasksForEmail as it's incompatible and replaced by client trigger
+  /*
   async checkDueTasksForEmail() {
-    // Removed Supabase dependency check
-    if (!transporter || !googleDriveService) return;
-
-    console.log('Checking for due tasks for email notifications...');
-    const now = new Date();
-    const currentMinute = startOfMinute(now);
-
-    try {
-      // Fetch tasks from Google Drive
-      const tasks = await googleDriveService.loadTasks();
-
-      if (!tasks || tasks.length === 0) {
-        console.log('No tasks found in Google Drive.');
-        return;
-      }
-
-      console.log(`Processing ${tasks.length} tasks from Google Drive for notifications.`);
-
-      // --- Removed Supabase email fetching logic ---
-      // const userIds = [...new Set(tasks.map(task => task.userId).filter(id => id))];
-      // if (userIds.length === 0) { ... }
-      // const { data: profiles, error: profileError } = await supabase...
-      // const userEmailMap = new Map(profiles.map(p => [p.id, p.email]));
-
-      for (const task of tasks) {
-        // Skip if task is completed or has no due date
-        // We can no longer reliably get the user's email here without Supabase
-        // unless the email is stored directly in the task data from Google Drive.
-        if (task.completed || !task.dueDate) {
-          continue;
-        }
-
-        // **Placeholder for getting user email:**
-        // You would need to modify how tasks are stored in Google Drive
-        // to include the user's email directly, or implement another
-        // mechanism to associate tasks with emails.
-        const userEmail = task.userEmail; // Assuming task object might have userEmail
-
-        if (!userEmail) {
-          console.warn(`No email found for task ID: ${task.id}. Cannot send email notification.`);
-          continue; // Skip if no email is associated with the task
-        }
-
-        const dueDate = parseISO(task.dueDate); // Parse the date string
-
-        // Check for Due Time Notification (if time is set and matches current minute)
-        if (task.dueTime && isToday(dueDate)) {
-          const [hours, minutes] = task.dueTime.split(':').map(Number);
-          const dueDateTime = new Date(dueDate);
-          dueDateTime.setHours(hours, minutes, 0, 0);
-
-          if (isSameMinute(currentMinute, dueDateTime)) {
-            console.log(`Task "${task.title}" (ID: ${task.id}) is due now. Sending time-specific email to ${userEmail}.`);
-            await this.sendEmailNotification(userEmail, task, 'dueTime');
-          }
-        }
-        // Logic for "Due Today" email (sent once daily) would require a different approach
-        // without the Supabase 'email_sent_today' flag. Could potentially track sent emails
-        // in memory (lost on restart) or another persistent store if needed.
-      }
-
-    } catch (error) {
-      console.error('Error during due task email check:', error);
-    }
+    // ... implementation removed ...
   }
+  */
 
+  // Remove scheduleEmailChecks as cron job is no longer needed for this
+  /*
   scheduleEmailChecks() {
-    // Run every minute to check for tasks due at the specific time
-    cron.schedule('* * * * *', () => {
-      this.checkDueTasksForEmail();
-    });
-
-    console.log('Scheduled email notification checks (every minute). NOTE: Requires user email in task data.');
-    // Removed the daily reset cron job as 'email_sent_today' flag is removed
+    // ... implementation removed ...
   }
+  */
 
-  // --- Browser Notifications (Placeholder - Actual scheduling/sending is client-side) ---
+  // --- Browser Notifications (Placeholders - Handled client-side) ---
   scheduleBrowserReminder(userId, task) {
     console.log(`Placeholder: Would schedule browser reminder for user ${userId}, task ${task.id}`);
   }
@@ -222,5 +160,6 @@ class NotificationService {
   }
 }
 
-// Export a single instance
+// Export a single instance AND the transporter
 export const notificationService = new NotificationService();
+export { transporter }; // Export the transporter instance

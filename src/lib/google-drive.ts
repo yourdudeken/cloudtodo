@@ -178,6 +178,14 @@ export interface TaskData {
         documents?: string[];
         videos?: string[];
     };
+    // Add comments array
+    comments?: {
+        id: string;
+        userId: string;
+        userEmail: string;
+        content: string;
+        createdAt: string; // ISO 8601 format
+    }[];
     // attachmentFolders is NOT included in the saved JSON as per feedback
     // --- Fields managed internally or added by functions ---
     id?: string; // Google Drive file ID (added during read/create)
@@ -219,7 +227,8 @@ export const createTask = async (
         categories: taskData.categories || [],
         tags: taskData.tags || [],
         recurrence: taskData.recurrence || "None",
-        attachments: taskData.attachments || { audio: [], images: [], documents: [], videos: [] }, // Ensure structure exists
+        attachments: taskData.attachments || { audio: [], images: [], documents: [], videos: [] },
+        comments: taskData.comments || [], // Initialize comments array
         // Add managed fields
         createdDate: new Date().toISOString(),
         updatedDate: new Date().toISOString(),
@@ -366,7 +375,9 @@ export const updateTask = async (
             // Ensure managed fields are not overwritten by updatedData
             id: existingTask.id,
             createdDate: existingTask.createdDate,
-            status: updatedData.status ?? existingTask.status, // Keep existing status if not provided in update
+            status: updatedData.status ?? existingTask.status,
+            // Ensure comments array is preserved if not part of the update
+            comments: updatedData.comments !== undefined ? updatedData.comments : existingTask.comments,
         };
 
         const media = {

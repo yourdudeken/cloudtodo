@@ -1,14 +1,11 @@
 import express from 'express';
-// Removed duplicate import below
-// import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { config } from 'dotenv';
-// Remove GoogleDriveService import as it's no longer used for task sync here
-// import { GoogleDriveService } from './google-drive.js';
-// Keep notification service import if it's still used for email reminders
-import { notificationService } from './notification-service.js';
+// Import transporter and date-fns
+import { transporter } from './notification-service.js';
+import { format, parseISO } from 'date-fns';
 
 config();
 
@@ -16,128 +13,139 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: "http://localhost:5173", // Allow requests from the frontend
     methods: ["GET", "POST"]
   }
 });
 
-app.use(cors());
-app.use(express.json());
+app.use(cors()); // Enable CORS for all routes
+app.use(express.json()); // Middleware to parse JSON bodies
 
-// Store active user connections
+// Store active user connections (still useful for chat/presence)
 const activeUsers = new Map();
 
-// Initialize Google Drive service using environment variables
-// This service instance can potentially be shared if user data isn't mixed,
-// but creating per-request might be safer if user-specific logic evolves.
-// For now, let's initialize it once or ensure credentials are correct each time.
-const initializeGoogleDrive = () => {
-  // Ensure all required env vars are present
-  const clientId = process.env.VITE_GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.VITE_CLIENT_SECRET;
-  const redirectUri = process.env.VITE_REDIRECT_URI;
-  const refreshToken = process.env.VITE_REFRESH_TOKEN;
-  // Remove encryptionKey check
-  // const encryptionKey = process.env.VITE_ENCRYPTION_KEY;
+// Removed initializeGoogleDrive and syncTasks as they are no longer needed server-side for tasks
 
-  // Remove encryptionKey from the check
-  if (!clientId || !clientSecret || !redirectUri || !refreshToken) {
-    console.error("Missing Google Drive credentials in environment variables!");
-    // Be more specific about what might be missing
-    // if (!encryptionKey) console.error("Specifically, VITE_ENCRYPTION_KEY is missing.");
-    throw new Error("Server configuration error: Missing Google Drive credentials."); // Updated error message
+// --- API Endpoint for Client-Triggered Email ---
+app.post('/api/send-due-email', async (req, res) => {
+  const { email, taskTitle, taskDescription, dueDate, dueTime } = req.body;
+
+  console.log(`[API /send-due-email] Received request for email: ${email}, task: ${taskTitle}`);
+
+  if (!email || !taskTitle) {
+    console.error('[API /send-due-email] Missing required fields (email or taskTitle).');
+    return res.status(400).json({ message: 'Missing required fields: email and taskTitle.' });
   }
 
-  // Remove GoogleDriveService instantiation here if not used elsewhere
-  // return new GoogleDriveService({
-  //   clientId,
-  //   clientSecret,
-  //   redirectUri,
-  //   refreshToken,
-  //   // encryptionKey // Removed
-  // });
+  if (!transporter) {
+    console.error('[API /send-due-email] Email transporter not available.');
+    return res.status(500).json({ message: 'Email service is not configured on the server.' });
+  }
 
-  // Return null or handle differently if the service was only for tasks
-  return null; // Indicate service is not needed/initialized here anymore
-};
+  // Prepare email content (similar to notification-service logic)
+  let subject = `Task Due Now: ${taskTitle}`;
+  // Format date/time for the email body if they exist
+  const formattedDueDate = dueDate ? format(parseISO(dueDate), 'PPP') : 'No date'; // Assumes YYYY-MM-DD input
+  const formattedDueTime = dueTime ? ` at ${dueTime}` : '';
+  let htmlContent = `<p>Your task "<strong>${taskTitle}</strong>" is due right now (${formattedDueDate}${formattedDueTime}).</p>`;
 
-// Remove syncTasks function as it's handled client-side
-/*
-const syncTasks = async (userId) => {
-  // ... implementation removed ...
-};
-*/
+  const mailOptions = {
+    from: `"CloudTask" <${process.env.EMAIL_USER}>`,
+    to: email, // Use email from request body
+    subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px;">
+        <h2 style="color: #1e40af;">Task Reminder</h2>
+        <p>Hi there,</p>
+        ${htmlContent}
+        ${taskDescription ? `<p><strong>Description:</strong> ${taskDescription}</p>` : ''}
+        <p style="margin-top: 25px; font-size: 0.9em; color: #6b7280;">
+          You can view this task in the CloudTask app.
+        </p>
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;">
+        <p style="font-size: 0.8em; color: #9ca3af;">This is an automated message from CloudTask.</p>
+      </div>
+    `,
+  };
 
-// Socket.IO connection handling
+  try {
+    let info = await transporter.sendMail(mailOptions);
+    console.log(`[API /send-due-email] Email sent successfully to ${email} for task "${taskTitle}": ${info.messageId}`);
+    res.status(200).json({ message: 'Email sent successfully.' });
+  } catch (error) {
+    console.error(`[API /send-due-email] Error sending email to ${email} for task "${taskTitle}":`, error);
+    res.status(500).json({ message: 'Failed to send email.' });
+  }
+});
+
+
+// --- Socket.IO connection handling (for chat/presence, not tasks) ---
 io.on('connection', (socket) => {
-  let userId = null; // Store userId associated with this socket connection
-  let userEmail = null; // Store userEmail associated with this socket connection
+  let userId = null;
+  let userEmail = null;
 
-  // Client sends userId and email upon connection/authentication
-  socket.on('authenticate', async ({ userId: uid, email: emailAddress }) => { // Expect email now
+  socket.on('authenticate', async ({ userId: uid, email: emailAddress }) => {
     console.log(`User ${uid} (${emailAddress || 'No email provided'}) attempting authentication...`);
-    if (!uid || !emailAddress) { // Validate both are received
+    if (!uid || !emailAddress) {
       console.error("Authentication failed: Missing userId or email from client.");
-      // Optionally send an error back to the client before disconnecting
       socket.emit('authError', { message: 'Authentication failed: Missing user ID or email.' });
-      socket.disconnect(true); // Disconnect the socket
+      socket.disconnect(true);
       return;
     }
     userId = uid;
-    userEmail = emailAddress; // Store the email for this connection
-    // Store socket and email together, keyed by userId
+    userEmail = emailAddress;
     activeUsers.set(userId, { socket, email: userEmail });
     console.log(`User ${userId} authenticated with email ${userEmail}`);
-
-    // Remove initial task sync logic
-    /*
-    try {
-      const tasks = await syncTasks(userId);
-      // ... emit tasksSynced ...
-    } catch (error) {
-       // ... handle error ...
-    }
-    */
+    // No initial task sync needed here anymore
   });
 
-  // Remove 'addTask' listener
-  // socket.on('addTask', async ({ task }) => { ... });
-
-  // Remove 'taskUpdate' listener
-  // socket.on('taskUpdate', async ({ task }) => { ... });
-
-  // Remove 'deleteTask' listener
-  // socket.on('deleteTask', async ({ taskId }) => { ... });
-
-
   // Keep chat message handling if needed
-  socket.on('chatMessage', async ({ taskId, message, userId }) => {
+  socket.on('chatMessage', async ({ taskId, message, userId: msgUserId }) => { // Renamed userId from destructuring
+    // Basic validation
+    if (!taskId || !message || !msgUserId) {
+        console.error('[chatMessage] Invalid data received:', { taskId, message, userId: msgUserId });
+        return;
+    }
+    // Find the sender's email from activeUsers (optional, could just use msgUserId)
+    const senderInfo = activeUsers.get(msgUserId);
+    const senderEmail = senderInfo ? senderInfo.email : 'Unknown';
+
+    console.log(`[chatMessage] Received from ${senderEmail} for task ${taskId}`);
+
     try {
+      // Use crypto directly if available in Node.js version
+      const crypto = await import('crypto');
       const newMessage = {
         id: crypto.randomUUID(),
         taskId,
-        userId,
-        message,
-        created_at: new Date().toISOString()
+        userId: msgUserId, // Use the ID from the message payload
+        userEmail: senderEmail, // Include sender's email
+        content: message, // Assuming 'content' is the field name expected by client
+        createdAt: new Date().toISOString()
       };
 
       // Broadcast message to all users in the task's room
+      // Ensure room name matches client-side joinTaskRoom if that's still used
       io.to(`task-${taskId}`).emit('newMessage', newMessage);
+      console.log(`[chatMessage] Broadcasted to room task-${taskId}`);
     } catch (error) {
-      console.error('Chat error:', error);
+      console.error('[chatMessage] Error processing chat message:', error);
     }
   });
 
   // Join task-specific chat room
   socket.on('joinTaskRoom', (taskId) => {
-    socket.join(`task-${taskId}`);
+    if (taskId) {
+        console.log(`Socket ${socket.id} joining room task-${taskId}`);
+        socket.join(`task-${taskId}`);
+    }
   });
 
-  // Associate socket with userId room for broadcasting
+  // Associate socket with userId room for broadcasting (useful for presence)
   socket.on('registerUser', (uid) => {
     if (uid) {
-      userId = uid; // Re-associate userId if needed, though authenticate should handle it
-      socket.join(uid); // Join a room named after the userId
+      userId = uid; // Re-associate userId if needed
+      socket.join(uid);
       console.log(`User ${userId} registered socket ${socket.id}`);
     }
   });
@@ -145,12 +153,9 @@ io.on('connection', (socket) => {
   // Handle disconnection
   socket.on('disconnect', () => {
     if (userId) {
-      // Remove user from activeUsers map when they disconnect
       activeUsers.delete(userId);
       console.log(`User ${userId} disconnected`);
-      // Note: This simple approach assumes one socket per user ID.
-      // If multiple connections per user are possible, more complex tracking is needed.
-    } // Removed extra closing brace here
+    }
   });
 });
 
