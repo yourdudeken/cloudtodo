@@ -1,69 +1,142 @@
-import * as React from 'react'; // Single React import
-import * as Dialog from '@radix-ui/react-dialog'; // Single Dialog import
-import * as Select from '@radix-ui/react-select';
-import { Button } from '@/components/ui/button';
-import { useTaskStore, Task } from '@/store/tasks'; // Import Task type
-import { useNotificationStore } from '@/store/notifications'; // Import notification store
-// FileAttachment seems unused, removing import
-// import { FileAttachment } from '@/lib/google-drive'; 
-import { Star, Pin, Calendar as CalendarIcon, Clock, AlertCircle, Tag, Repeat, Battery as Category, Upload, X, Paperclip, Trash2 } from 'lucide-react'; // Add Paperclip, Trash2
-import { format } from 'date-fns';
+import * as React from 'react'; // Keep only one React import
+import * as Dialog from '@radix-ui/react-dialog'; // Keep only one Dialog import
+import * as Select from '@radix-ui/react-select'; // Keep only one Select import
+import { Button } from '@/components/ui/button'; // Keep only one Button import
+// Import Task type (aliased TaskData) and UIAttachment
+import { useTaskStore, Task, UIAttachment } from '@/store/tasks';
+import { useNotificationStore } from '@/store/notifications';
+// Import necessary icons, remove duplicates if any
+import { Star, Pin, Calendar as CalendarIcon, Clock, AlertCircle, Tag, Repeat, Battery as Category, Upload, X, Paperclip, Trash2 } from 'lucide-react';
+import { format, parseISO } from 'date-fns'; // Import parseISO
 import { DayPicker } from 'react-day-picker';
 
 interface EditTaskDialogProps {
   taskId: string;
-  initialSuggestion?: string; // Add optional initialSuggestion prop
+  initialSuggestion?: string;
   onClose: () => void;
 }
 
-export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskDialogProps): React.ReactElement | null { // Add return type annotation
-  // Explicitly type the task state
-  const task = useTaskStore((state) => state.tasks.find((t): t is Task => t.id === taskId));
+export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskDialogProps): React.ReactElement | null {
+  const { task, uiAttachments, categories, tags } = useTaskStore((state) => ({
+      task: state.tasks.find((t): t is Task => t.id === taskId),
+      uiAttachments: state.uiAttachments[taskId] || [],
+      categories: state.categories, // Get categories from store
+      tags: state.tags // Get tags from store
+  }));
   const updateTask = useTaskStore((state) => state.updateTask);
   const uploadAttachment = useTaskStore((state) => state.uploadAttachment);
+  // Uncomment deleteAttachment as it's now implemented in the store
   const deleteAttachment = useTaskStore((state) => state.deleteAttachment);
 
-  const [title, setTitle] = React.useState(task?.title || '');
-  const [description, setDescription] = React.useState(task?.description || '');
-  const [dueDate, setDueDate] = React.useState<Date | undefined>(task?.dueDate);
-  const [dueTime, setDueTime] = React.useState(task?.dueTime || '');
-  // Initialize reminder state to undefined if task.reminder is null, undefined, or 0 (assuming 0 isn't a valid reminder value)
-  const [reminder, setReminder] = React.useState<number | undefined>(task?.reminder || undefined);
-  const [priority, setPriority] = React.useState<1 | 2 | 3 | 4>(task?.priority || 4);
-  const [isStarred, setIsStarred] = React.useState(task?.isStarred || false);
-  const [isPinned, setIsPinned] = React.useState(task?.isPinned || false);
-  // Initialize category state to undefined if task.category is null, undefined, or empty string
-  const [category, setCategory] = React.useState(task?.category || ''); // Keep existing logic, as `|| ''` handles falsy values correctly for string state
-  const [selectedTags, setSelectedTags] = React.useState<string[]>(task?.tags || []);
+  // State for form fields
+  const [title, setTitle] = React.useState('');
+  const [description, setDescription] = React.useState('');
+  const [dueDate, setDueDate] = React.useState<Date | undefined>(undefined);
+  const [dueTime, setDueTime] = React.useState('');
+  const [reminder, setReminder] = React.useState<number | undefined>(undefined);
+  const [priority, setPriority] = React.useState<1 | 2 | 3 | 4>(4);
+  const [isStarred, setIsStarred] = React.useState(false);
+  const [isPinned, setIsPinned] = React.useState(false);
+  const [category, setCategory] = React.useState('');
+  const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [showCalendar, setShowCalendar] = React.useState(false);
-  // Removed recurrence state
+  const [recurrence, setRecurrence] = React.useState<string | undefined>(undefined);
+  const [taskType, setTaskType] = React.useState<'personal' | 'collaborative'>('personal');
 
-  const { categories, tags } = useTaskStore();
   const [newCategory, setNewCategory] = React.useState('');
   const [newTag, setNewTag] = React.useState('');
+  const [attachmentToDelete, setAttachmentToDelete] = React.useState<UIAttachment | null>(null);
 
-  // State and ref for file input
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = React.useState(false);
 
+  // Effect to initialize state when task data is available or changes
+  React.useEffect(() => {
+    if (task) {
+      setTitle(task.taskTitle || '');
+      setDescription(initialSuggestion ?? (task.description || ''));
+      try {
+        setDueDate(task.dueDate ? parseISO(task.dueDate) : undefined);
+      } catch (e) {
+        console.error("Error parsing dueDate in Edit Dialog:", task.dueDate, e);
+        setDueDate(undefined);
+      }
+      setDueTime(task.dueTime || '');
+      setReminder(task.reminder);
+      // Add type assertion to satisfy the state setter
+      setPriority((task.priority ?? 4) as 1 | 2 | 3 | 4);
+      setIsStarred(task.isStarred || false);
+      setIsPinned(task.isPinned || false);
+      setCategory(task.categories?.[0] || '');
+      setSelectedTags(task.tags || []);
+      setTaskType(task.taskType?.isCollaborative ? 'collaborative' : 'personal');
+      setRecurrence(task.recurrence);
+    }
+  }, [task, initialSuggestion]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateTask(taskId, {
-      title,
-      description,
-      dueDate,
-      dueTime,
-      reminder,
-      priority,
-      isStarred,
-      isPinned,
-      category,
+    if (!task?.id) return;
+
+    updateTask(task.id, {
+      taskTitle: title,
+      description: description || undefined,
+      dueDate: dueDate ? format(dueDate, 'yyyy-MM-dd') : undefined,
+      dueTime: dueTime || undefined,
+      reminder: reminder,
+      priority: priority,
+      isStarred: isStarred,
+      isPinned: isPinned,
+      categories: category ? [category] : [],
       tags: selectedTags,
-      // Removed recurrence from updateTask call
-      // Note: Attachments are handled separately by upload/delete actions, not saved here.
+      taskType: {
+          isPersonal: taskType === 'personal',
+          isCollaborative: taskType === 'collaborative',
+      },
+      recurrence: recurrence || "None",
     });
     onClose();
   };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file && task?.id) {
+          setIsUploading(true);
+          try {
+              await uploadAttachment(task.id, file);
+              useNotificationStore.getState().addNotification({
+                  type: 'success',
+                  message: `Uploaded ${file.name}`
+              });
+          } catch (error) {
+              console.error("Upload failed:", error);
+              useNotificationStore.getState().addNotification({
+                  type: 'error',
+                  message: `Failed to upload ${file.name}`
+              });
+          } finally {
+              setIsUploading(false);
+              if (fileInputRef.current) {
+                  fileInputRef.current.value = '';
+              }
+          }
+      }
+  };
+
+  // Placeholder for delete handler
+  const handleDeleteAttachmentClick = (attachment: UIAttachment) => {
+      console.warn("Attachment deletion not implemented yet.");
+      setAttachmentToDelete(attachment); // Show confirmation dialog
+  };
+
+  const confirmDeleteAttachment = () => {
+      if (attachmentToDelete && task?.id) {
+          // Call the store function
+          deleteAttachment(task.id, attachmentToDelete.driveFileId);
+          setAttachmentToDelete(null); // Close dialog
+      }
+  };
+
 
   const reminderOptions = [
     { value: 5, label: '5 minutes before' },
@@ -79,40 +152,15 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
     4: 'bg-gray-500',
   };
 
-  // Effect to update local state if the task prop changes or if an initial suggestion is provided
-  React.useEffect(() => {
-    if (task) {
-      setTitle(task.title || '');
-      // Use initialSuggestion if provided, otherwise use task's description (added parentheses for clarity)
-      setDescription(initialSuggestion ?? (task.description || '')); 
-      setDueDate(task.dueDate);
-      setDueTime(task.dueTime || '');
-      // Ensure reminder state is set to undefined if task.reminder is null/undefined/0
-      setReminder(task.reminder || undefined);
-      setPriority(task.priority || 4);
-      setIsStarred(task.isStarred || false);
-      setIsPinned(task.isPinned || false);
-      // Ensure category state is set to '' if task.category is null/undefined/''
-      setCategory(task.category || ''); // Keep existing logic
-      setSelectedTags(task.tags || []);
-      // Removed recurrence update from useEffect
-      // Attachments are part of the task object, so they update automatically
-    }
-  }, [task, initialSuggestion]); // Rerun effect if task or initialSuggestion changes
-
-  // NOTE: Removed pre-calculated variable as it didn't seem to help TS
-
-  // Removed isIntervalDisabled variable
-
-  if (!task) return null; // Return null if task not found
+  if (!task) return null;
 
   return (
     <Dialog.Root open={true} onOpenChange={onClose}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 data-[state=open]:animate-overlayShow" />
-        <Dialog.Content className="fixed left-[50%] top-[50%] max-h-[85vh] w-[90vw] max-w-[600px] translate-x-[-50%] translate-y-[-50%] rounded-lg bg-white p-6 shadow-lg overflow-y-auto data-[state=open]:animate-contentShow focus:outline-none">
+        <Dialog.Content className="fixed left-[50%] top-[50%] max-h-[85vh] w-[90vw] max-w-[600px] translate-x-[-50%] translate-y-[-50%] rounded-lg bg-white dark:bg-gray-800 p-6 shadow-lg overflow-y-auto data-[state=open]:animate-contentShow focus:outline-none dark:text-gray-200">
           <div className="flex items-center justify-between mb-6">
-            <Dialog.Title className="text-2xl font-semibold">Edit Task</Dialog.Title>
+            <Dialog.Title className="text-2xl font-semibold dark:text-white">Edit Task</Dialog.Title>
             <Dialog.Close asChild>
               <Button variant="ghost" size="icon" aria-label="Close">
                 <X className="h-4 w-4" />
@@ -121,13 +169,12 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* ... other form inputs ... */}
              <input
               type="text"
               placeholder="Task title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
               required
               aria-label="Task title"
             />
@@ -136,23 +183,42 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
               placeholder="Description (optional)"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] dark:bg-gray-700 dark:border-gray-600"
               aria-label="Task description"
             />
+
+            {/* Task Type Selector */}
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium dark:text-gray-300">Task Type:</label>
+              <Select.Root value={taskType} onValueChange={(value: 'personal' | 'collaborative') => setTaskType(value)}>
+                <Select.Trigger className="inline-flex items-center justify-center gap-2 px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                  <Select.Value placeholder="Select type" />
+                </Select.Trigger>
+                <Select.Portal>
+                  <Select.Content className="bg-white dark:bg-gray-700 rounded-lg shadow-lg border dark:border-gray-600 p-1 z-50">
+                    <Select.Viewport>
+                      <Select.Item value="personal" className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer rounded">Personal</Select.Item>
+                      <Select.Item value="collaborative" className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer rounded">Collaborative</Select.Item>
+                    </Select.Viewport>
+                  </Select.Content>
+                </Select.Portal>
+              </Select.Root>
+            </div>
+
 
             <div className="flex flex-wrap gap-4 items-center">
               <div className="relative">
                 <Button
                   type="button"
                   variant="outline"
-                  className="gap-2"
+                  className="gap-2 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
                   onClick={() => setShowCalendar(!showCalendar)}
                 >
                   <CalendarIcon className="h-4 w-4" />
                   {dueDate ? format(dueDate, 'MMM d, yyyy') : 'Due date'}
                 </Button>
                 {showCalendar && (
-                  <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg z-50 border">
+                  <div className="absolute top-full left-0 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg z-50 border dark:border-gray-600">
                     <DayPicker
                       mode="single"
                       selected={dueDate}
@@ -168,36 +234,35 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
 
               <input
                 type="time"
-                aria-label="Due time" // Add aria-label
+                aria-label="Due time"
                 value={dueTime}
                 onChange={(e) => setDueTime(e.target.value)}
-                className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
               />
 
-              {/* Use "none" for empty reminder state */}
               <Select.Root
-                value={reminder?.toString() ?? "none"} // Default to "none" if reminder is null/undefined
-                onValueChange={(value) => setReminder(value === "none" ? undefined : Number(value))} // Map "none" back to undefined
+                value={reminder?.toString() ?? "none"}
+                onValueChange={(value) => setReminder(value === "none" ? undefined : Number(value))}
               >
-                <Select.Trigger className="inline-flex items-center justify-center gap-2 px-3 py-2 border rounded-lg">
+                <Select.Trigger className="inline-flex items-center justify-center gap-2 px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
                   <Clock className="h-4 w-4" />
-                  <Select.Value placeholder="Set reminder" /> {/* Placeholder shown when value is '' */}
+                  <Select.Value placeholder="Set reminder" />
                 </Select.Trigger>
                 <Select.Portal>
-                  <Select.Content className="bg-white rounded-lg shadow-lg border p-1 z-50">
+                  <Select.Content className="bg-white dark:bg-gray-700 rounded-lg shadow-lg border dark:border-gray-600 p-1 z-50">
                     <Select.Viewport>
                       {reminderOptions.map((option) => (
                         <Select.Item
                           key={option.value}
                           value={option.value.toString()}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer rounded"
+                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer rounded"
                         >
                           <Select.ItemText>{option.label}</Select.ItemText>
                         </Select.Item>
                       ))}
                        <Select.Item
-                          value="none" // Use "none" instead of ""
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer rounded text-gray-500"
+                          value="none"
+                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer rounded text-gray-500 dark:text-gray-400"
                         >
                           <Select.ItemText>No reminder</Select.ItemText>
                         </Select.Item>
@@ -208,15 +273,15 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
             </div>
 
             <div className="flex items-center gap-4">
-              <label className="text-sm font-medium">Priority:</label>
+              <label className="text-sm font-medium dark:text-gray-300">Priority:</label>
               <div className="flex items-center gap-2">
                 {[1, 2, 3, 4].map((p) => (
                   <button
                     key={p}
                     type="button"
-                    aria-label={`Set priority ${p}`} // Add aria-label
+                    aria-label={`Set priority ${p}`}
                     className={`w-6 h-6 rounded-full border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                      priority === p ? priorityColors[p as keyof typeof priorityColors] : 'bg-gray-200 hover:bg-gray-300'
+                      priority === p ? priorityColors[p as keyof typeof priorityColors] : 'bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500'
                     }`}
                     onClick={() => setPriority(p as 1 | 2 | 3 | 4)}
                   />
@@ -229,7 +294,7 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
               <Button
                 type="button"
                 variant={isStarred ? 'default' : 'outline'}
-                className="gap-2"
+                className="gap-2 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
                 onClick={() => setIsStarred(!isStarred)}
               >
                 <Star className={`h-4 w-4 ${isStarred ? 'fill-current text-yellow-400' : ''}`} />
@@ -239,34 +304,33 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
               <Button
                 type="button"
                 variant={isPinned ? 'default' : 'outline'}
-                className="gap-2"
+                className="gap-2 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
                 onClick={() => setIsPinned(!isPinned)}
               >
                 <Pin className={`h-4 w-4 ${isPinned ? 'fill-current' : ''}`} />
                 Pin
               </Button>
 
-              {/* Use "none" for empty category state */}
-              <Select.Root value={category ?? "none"} onValueChange={(value) => setCategory(value === "none" ? "" : value)}> {/* Map "none" back to "" */}
-                <Select.Trigger className="inline-flex items-center justify-center gap-2 px-3 py-2 border rounded-lg">
+              <Select.Root value={category ?? "none"} onValueChange={(value) => setCategory(value === "none" ? "" : value)}>
+                <Select.Trigger className="inline-flex items-center justify-center gap-2 px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
                   <Category className="h-4 w-4" />
-                  <Select.Value placeholder="Select category" /> {/* Placeholder shown when value is '' */}
+                  <Select.Value placeholder="Select category" />
                 </Select.Trigger>
                 <Select.Portal>
-                  <Select.Content className="bg-white rounded-lg shadow-lg border p-1 z-50">
+                  <Select.Content className="bg-white dark:bg-gray-700 rounded-lg shadow-lg border dark:border-gray-600 p-1 z-50">
                     <Select.Viewport>
                       {categories.map((cat) => (
                         <Select.Item
                           key={cat}
                           value={cat}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer rounded"
+                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer rounded"
                         >
                           <Select.ItemText>{cat}</Select.ItemText>
                         </Select.Item>
                       ))}
                        <Select.Item
-                          value="none" // Use "none" instead of ""
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer rounded text-gray-500"
+                          value="none"
+                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer rounded text-gray-500 dark:text-gray-400"
                         >
                           <Select.ItemText>No category</Select.ItemText>
                         </Select.Item>
@@ -281,7 +345,7 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
                   placeholder="New category"
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value)}
-                  className="px-3 py-2 border rounded-lg"
+                  className="px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
                   aria-label="New category name"
                 />
                 <Button
@@ -300,7 +364,7 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Tags:</label>
+              <label className="text-sm font-medium dark:text-gray-300">Tags:</label>
               <div className="flex flex-wrap gap-2">
                 {tags.map((tag) => (
                   <Button
@@ -308,6 +372,7 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
                     type="button"
                     variant={selectedTags.includes(tag) ? 'default' : 'outline'}
                     size="sm"
+                    className="dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
                     onClick={() => {
                       setSelectedTags(
                         selectedTags.includes(tag)
@@ -327,7 +392,7 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
                   placeholder="New tag"
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
-                  className="px-3 py-2 border rounded-lg"
+                  className="px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
                   aria-label="New tag name"
                 />
                 <Button
@@ -345,35 +410,26 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
               </div>
             </div>
 
-            {/* Removed Recurrence Section */}
-
             {/* Attachments Section */}
             <div className="space-y-2">
-              <h4 className="font-medium flex items-center gap-2">
+              <h4 className="font-medium flex items-center gap-2 dark:text-gray-100">
                 <Paperclip className="h-4 w-4" />
                 Attachments
               </h4>
-              {/* List existing attachments */}
-              <div className="space-y-1 max-h-32 overflow-y-auto border dark:border-gray-600 rounded-md p-2"> {/* Add scroll, border, padding */}
-                {task?.attachments && task.attachments.length > 0 ? (
-                  task.attachments.map((att) => (
-                  <div key={att.id} className="flex items-center justify-between text-sm p-2 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
-                    <a
-                      href={att.downloadUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:underline truncate mr-2 flex-grow dark:text-gray-200"
-                      title={att.name} // Add title for long names
-                    >
+              <div className="space-y-1 max-h-32 overflow-y-auto border dark:border-gray-600 rounded-md p-2">
+                {uiAttachments.length > 0 ? (
+                  uiAttachments.map((att) => (
+                  <div key={att.driveFileId} className="flex items-center justify-between text-sm p-2 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
+                    <span className="hover:underline truncate mr-2 flex-grow dark:text-gray-200" title={att.name}>
                       {att.name}
-                    </a>
+                    </span>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/20 flex-shrink-0" // Adjusted hover for dark mode
-                      onClick={() => deleteAttachment(taskId, att.id)}
-                      title="Delete attachment" // Title acts as label here
+                      className="h-6 w-6 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/20 flex-shrink-0"
+                      onClick={() => handleDeleteAttachmentClick(att)} // Use placeholder handler
+                      title="Delete attachment"
                       aria-label={`Delete attachment ${att.name}`}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -381,43 +437,16 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
                   </div>
                   ))
                 ) : (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 px-2 py-1">No attachments yet.</p> // Adjusted styling
+                  <p className="text-sm text-gray-500 dark:text-gray-400 px-2 py-1">No attachments.</p>
                 )}
               </div>
-              {/* Add attachment button */}
               <div>
                 <input
                   type="file"
                   ref={fileInputRef}
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setIsUploading(true);
-                      try {
-                        await uploadAttachment(taskId, file);
-                        // Optionally show success notification
-                        useNotificationStore.getState().addNotification({
-                          type: 'success',
-                          message: `Uploaded ${file.name}`
-                        });
-                      } catch (error) {
-                        console.error("Upload failed:", error);
-                        // Show error notification
-                         useNotificationStore.getState().addNotification({
-                          type: 'error',
-                          message: `Failed to upload ${file.name}`
-                        });
-                      } finally {
-                        setIsUploading(false);
-                        // Reset file input value so the same file can be selected again if needed
-                        if (fileInputRef.current) {
-                          fileInputRef.current.value = '';
-                        }
-                      }
-                    }
-                  }}
+                  onChange={handleFileChange}
                   className="hidden"
-                  aria-hidden="true" // Hide from accessibility tree as it's triggered by button
+                  aria-hidden="true"
                 />
                 <Button
                   type="button"
@@ -425,7 +454,7 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploading}
-                  className="gap-2 mt-2" // Add margin top
+                  className="gap-2 mt-2 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
                 >
                   <Upload className="h-4 w-4" />
                   {isUploading ? 'Uploading...' : 'Add Attachment'}
@@ -435,8 +464,8 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
             {/* End Attachments Section */}
 
 
-            <div className="flex justify-end gap-2 pt-4 border-t mt-6"> {/* Add border top */}
-              <Button type="button" variant="outline" onClick={onClose}>
+            <div className="flex justify-end gap-2 pt-4 border-t mt-6 dark:border-gray-600">
+              <Button type="button" variant="outline" onClick={onClose} className="dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600">
                 Cancel
               </Button>
               <Button type="submit">Save Changes</Button>
@@ -444,6 +473,33 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
           </form>
         </Dialog.Content>
       </Dialog.Portal>
+      {/* Add Attachment Deletion Confirmation Dialog */}
+       <Dialog.Root open={!!attachmentToDelete} onOpenChange={() => setAttachmentToDelete(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/50" />
+          <Dialog.Content className="fixed left-[50%] top-[50%] max-h-[85vh] w-[90vw] max-w-[400px] translate-x-[-50%] translate-y-[-50%] rounded-lg bg-white dark:bg-gray-800 p-6 shadow-lg">
+            <Dialog.Title className="text-xl font-semibold mb-4 dark:text-white">Delete Attachment</Dialog.Title>
+            <Dialog.Description className="text-gray-600 dark:text-gray-300 mb-6">
+              Are you sure you want to delete the attachment: <strong className="break-all">{attachmentToDelete?.name}</strong>? This action cannot be undone.
+            </Dialog.Description>
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setAttachmentToDelete(null)}
+                className="dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmDeleteAttachment} // Use confirmation handler
+              >
+                Delete Attachment
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </Dialog.Root>
   );
 }

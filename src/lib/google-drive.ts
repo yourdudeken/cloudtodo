@@ -523,4 +523,35 @@ export const uploadAttachment = async (
 };
 
 
-// TODO: Implement deleteAttachment (if needed) - would need file ID
+/**
+ * Deletes a file from Google Drive by its ID.
+ * @param accessToken User's access token.
+ * @param fileId The Google Drive file ID of the file to delete.
+ * @returns True if deletion was successful, false otherwise.
+ */
+export const deleteFile = async (
+    accessToken: string,
+    fileId: string
+): Promise<boolean> => {
+    console.log(`[deleteFile] Attempting to delete file with ID: ${fileId}`);
+    try {
+        await axios.delete(`${DRIVE_API_URL}/files/${fileId}`, {
+            headers: createHeaders(accessToken),
+        });
+        console.log(`[deleteFile] Successfully deleted file with ID: ${fileId}`);
+        return true;
+    } catch (error: unknown) {
+        console.error(`[deleteFile] Error deleting file with ID ${fileId}:`, error);
+        const axiosError = error as AxiosError;
+        if (axios.isAxiosError(axiosError)) {
+            if (axiosError.response?.status === 404) {
+                console.warn("[deleteFile] File not found for deletion (404). Assuming already deleted.");
+                // Consider returning true if not found, as the goal (file doesn't exist) is achieved
+                return true;
+            } else if (axiosError.response?.status === 401 || axiosError.response?.status === 403) {
+                console.error("[deleteFile] Authentication error. Please re-login.");
+            }
+        }
+        return false; // Indicate failure
+    }
+};
