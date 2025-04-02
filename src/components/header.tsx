@@ -1,21 +1,15 @@
-import React, { useState, useEffect } from 'react'; // Keep one set of React imports
-import { useAuthStore } from '@/store/auth'; // Keep one useAuthStore import
-import { useNotificationStore } from '@/store/notifications'; // Keep one useNotificationStore import
-// Removed duplicate React, useAuthStore, useNotificationStore imports below
+import React, { useState, useEffect } from 'react'; // Import useState and useEffect
+import { useAuthStore } from '@/store/auth';
+import { useNotificationStore } from '@/store/notifications';
 import { useSettingsStore } from '@/store/settings';
 import { Button } from './ui/button';
-// Add Menu icon import
-import { Bell, Settings, HelpCircle, Sun, Moon, Monitor, Check, X, Volume2, Mail, BellRing, BellOff, Menu } from 'lucide-react';
+import { Bell, Settings, HelpCircle, Sun, Moon, Monitor, Check, X, Volume2, Mail, BellRing, BellOff } from 'lucide-react'; // Added BellOff, BellRing
 import * as Popover from '@radix-ui/react-popover';
 import * as Select from '@radix-ui/react-select';
 import { format } from 'date-fns';
-import { UserProfile } from './user-profile';
-// Remove unused notification imports if syncBrowserNotifications isn't used
-import { requestNotificationPermission } from '@/lib/browser-notifications';
-// Remove unused task store import
-// import { useTaskStore } from '@/store/tasks';
-// Import sidebar context
-import { useSidebarContext } from '@/lib/sidebar-context';
+import { UserProfile } from './user-profile'; // Import UserProfile
+import { requestNotificationPermission, syncBrowserNotifications } from '@/lib/browser-notifications'; // Import notification utilities
+import { useTaskStore } from '@/store/tasks'; // Import useTaskStore
 
 export function Header() {
   const { user } = useAuthStore();
@@ -27,8 +21,6 @@ export function Header() {
     clearAll,
   } = useNotificationStore();
   const { settings, updateSettings } = useSettingsStore();
-  // Get sidebar state and setter from context
-  const { isCollapsed, setIsCollapsed } = useSidebarContext();
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -46,22 +38,10 @@ export function Header() {
   ];
 
   return (
-    <header className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 sticky top-0 z-50"> {/* Added dark mode classes */}
-      {/* Adjusted max-width and padding for responsiveness */}
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Left side: Mobile Menu Toggle + Logo/Title */}
+    <header className="bg-white border-b sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+        {/* Logo and Title */}
         <div className="flex items-center gap-2">
-          {/* Mobile Menu Button - visible only on small screens */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden mr-2" // Hide on large screens and up
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            aria-label="Toggle sidebar"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-          {/* Logo and Title */}
           <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold">CT</span>
           </div>

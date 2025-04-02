@@ -12,15 +12,13 @@ import { socketService } from '@/lib/socket';
 import { taskCache } from '@/lib/cache'; // Import taskCache
 import { requestNotificationPermission } from '@/lib/browser-notifications'; // Import notification function
 import { Cloud, ListTodo, Lock, CheckCircle } from 'lucide-react';
-import { SidebarProvider, useSidebarContext } from '@/lib/sidebar-context'; // Import context hook
-import { cn } from '@/lib/utils'; // Import cn utility
+import { SidebarProvider } from '@/lib/sidebar-context'; // Corrected import path
 
 function App() {
+  // Remove reloadTasks from destructuring
   const { isAuthenticated, accessToken, user } = useAuthStore();
   const { settings } = useSettingsStore();
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  // Get sidebar state from context to adjust main content padding
-  const { isCollapsed } = useSidebarContext();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null); // State for selected task
 
   // Clear cache on initial app load to remove potentially stale data
   useEffect(() => {
@@ -82,18 +80,12 @@ function App() {
         <div className="flex min-h-screen bg-background text-foreground flex-col"> {/* Make main container a column */}
           {isAuthenticated ? (
             <>
-              <Header />
-              {/* Main layout container */}
-              <div className="flex flex-1 overflow-hidden"> {/* Added overflow-hidden */}
-                {/* Sidebar takes its own width, main content takes remaining space */}
+              <Header /> {/* Header is now outside the sidebar/content split */}
+              <div className="flex flex-1"> {/* Add flex container for sidebar and content */}
                 <Sidebar />
-                {/* Adjust main content margin based on sidebar state on large screens */}
-                <main className={cn(
-                  "flex-1 p-4 md:p-6 overflow-y-auto transition-all duration-300 ease-in-out",
-                  // Apply margin only on lg+ screens when sidebar is NOT collapsed
-                  !isCollapsed ? "lg:ml-[240px]" : "lg:ml-[60px]"
-                )}>
-                  <TaskList onTaskClick={setSelectedTaskId} />
+                <main className="flex-1 p-6 overflow-y-auto"> {/* Added overflow-y-auto */}
+                  {/* Pass handler to TaskList */}
+                  <TaskList onTaskClick={setSelectedTaskId} /> 
                 </main>
               </div>
               <Footer /> {/* Footer remains inside the main container */}
