@@ -1,6 +1,15 @@
 import { Task } from '@/store/tasks'; // Task type from store
-import { FileAttachment } from '@/lib/google-drive'; // Import FileAttachment type from its source
+//import { TaskData } from '@/lib/google-drive'; // Import TaskData type from its source
 import mime from 'mime-types'; // Import mime-types library
+
+interface FileAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  thumbnailUrl?: string;
+  downloadUrl: string;
+}
 
 class TaskCache {
   private static instance: TaskCache;
@@ -94,7 +103,14 @@ class TaskCache {
         // Ensure dates are stored in a serializable format (ISO string)
         const tasksToSave = cachedData.tasks.map(task => ({
           ...task,
-          dueDate: task.dueDate instanceof Date ? task.dueDate.toISOString() : task.dueDate,
+          dueDate: task.dueDate ?
+            (typeof task.dueDate === 'string' ? task.dueDate :
+             (typeof task.dueDate === 'object' && task.dueDate !== null ? 
+              (typeof (task.dueDate as any).toISOString === 'function' ? 
+               (task.dueDate as any).toISOString() : 
+               JSON.stringify(task.dueDate)) :
+              String(task.dueDate)))
+            : undefined,
           // createdAt is already a number (timestamp), which is fine for JSON
         }));
         localStorage.setItem('taskCache', JSON.stringify({ tasks: tasksToSave, timestamp: cachedData.timestamp }));

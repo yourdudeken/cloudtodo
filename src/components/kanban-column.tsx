@@ -1,4 +1,4 @@
-import React from 'react';
+//import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -42,7 +42,10 @@ export function KanbanColumn({ id, title, tasks, icon, onTaskClick }: KanbanColu
       </div>
 
       <SortableContext
-        items={tasks.map((t) => t.id)}
+        items={tasks ? tasks
+          .map((t) => t.id)
+          .filter((id): id is string => typeof id === 'string') 
+          : []}
         strategy={verticalListSortingStrategy}
       >
         <div className="space-y-3">

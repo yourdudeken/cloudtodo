@@ -1,18 +1,13 @@
-import React, { useState, useEffect } from 'react'; // Import useState and useEffect
-import { useAuthStore } from '@/store/auth';
 import { useNotificationStore } from '@/store/notifications';
 import { useSettingsStore } from '@/store/settings';
 import { Button } from './ui/button';
-import { Bell, Settings, HelpCircle, Sun, Moon, Monitor, Check, X, Volume2, Mail, BellRing, BellOff } from 'lucide-react'; // Added BellOff, BellRing
+import { Bell, Settings, HelpCircle, Sun, Moon, Monitor, Check, X, Volume2, Mail, BellRing } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import * as Select from '@radix-ui/react-select';
 import { format } from 'date-fns';
-import { UserProfile } from './user-profile'; // Import UserProfile
-import { requestNotificationPermission, syncBrowserNotifications } from '@/lib/browser-notifications'; // Import notification utilities
-import { useTaskStore } from '@/store/tasks'; // Import useTaskStore
+import { UserProfile } from './user-profile';
 
 export function Header() {
-  const { user } = useAuthStore();
   const {
     notifications,
     markAsRead,
@@ -50,7 +45,7 @@ export function Header() {
           </h1>
         </div>
 
-        {/* Right Side Actions - UserProfile moved to the end */}
+        {/* Right Side Actions */}
         <div className="flex items-center gap-4">
           {/* Help Button */}
           <Popover.Root>
@@ -184,7 +179,7 @@ export function Header() {
                               size="icon"
                               className="h-6 w-6"
                               onClick={() => removeNotification(notification.id)}
-                            >
+                              >
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
@@ -390,7 +385,7 @@ export function Header() {
             </Popover.Portal>
           </Popover.Root>
 
-          <UserProfile /> {/* UserProfile moved to the end */}
+          <UserProfile />
         </div>
       </div>
     </header>

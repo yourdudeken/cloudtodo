@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+//import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { LayoutDashboard, Pin, Star, Calendar, Clock, Kanban as LayoutKanban, ChevronLeft, ChevronRight, Menu, Users, Plus } from 'lucide-react'; // Re-added Plus
 import { cn } from '@/lib/utils';
 import { AddTaskDialog } from './add-task-dialog';
-import { CollaborateDialog } from './collaborate-dialog'; // Re-added CollaborateDialog import
+//import { CollaborateDialog } from './collaborate-dialog'; // Re-added CollaborateDialog import
 import { useLocation } from '@/lib/hooks';
-import { UserProfile } from './user-profile';
+//import { UserProfile } from './user-profile';
 import { useSidebarContext } from '@/lib/sidebar-context'; // Corrected context import path
 // Removed task store import as it's no longer needed here
 

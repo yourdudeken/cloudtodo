@@ -2,7 +2,7 @@ import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 // Removed duplicate imports
 // Use Task type which is now alias for TaskData
-import { useTaskStore, Task } from '@/store/tasks';
+import { useTaskStore, /*Task*/ } from '@/store/tasks';
 import { Button } from '@/components/ui/button';
 import { Circle, CheckCircle2, Calendar, Flag, Pin, Star, Edit2, Trash2, Users } from 'lucide-react';
 import { format, parseISO } from 'date-fns'; // Import parseISO

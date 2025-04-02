@@ -8,7 +8,6 @@ import { TaskDetail } from './task-detail';
 export function CalendarView() {
   const tasks = useTaskStore((state) => state.tasks);
   const [selectedDate, setSelectedDate] = React.useState(startOfToday());
-  const [currentMonth, setCurrentMonth] = React.useState(format(selectedDate, 'MMM-yyyy'));
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
   const firstDayCurrentMonth = startOfMonth(selectedDate);
 
@@ -28,14 +27,12 @@ export function CalendarView() {
     const firstDayNextMonth = new Date(firstDayCurrentMonth);
     firstDayNextMonth.setMonth(firstDayNextMonth.getMonth() - 1);
     setSelectedDate(firstDayNextMonth);
-    setCurrentMonth(format(firstDayNextMonth, 'MMM-yyyy'));
   };
 
   const nextMonth = () => {
     const firstDayNextMonth = new Date(firstDayCurrentMonth);
     firstDayNextMonth.setMonth(firstDayNextMonth.getMonth() + 1);
     setSelectedDate(firstDayNextMonth);
-    setCurrentMonth(format(firstDayNextMonth, 'MMM-yyyy'));
   };
 
   const getTasksForDate = (date: Date) => {
@@ -53,6 +50,7 @@ export function CalendarView() {
           <button
             onClick={previousMonth}
             className="p-2 hover:bg-gray-100 rounded-full"
+            aria-label="Previous month"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -62,6 +60,7 @@ export function CalendarView() {
           <button
             onClick={nextMonth}
             className="p-2 hover:bg-gray-100 rounded-full"
+            aria-label="Next month"
           >
             <ChevronRight className="h-5 w-5" />
           </button>
@@ -77,7 +76,7 @@ export function CalendarView() {
             {day}
           </div>
         ))}
-        {days.map((day, dayIdx) => {
+        {days.map((day) => {
           const tasksForDay = getTasksForDate(day);
           const firstTask = tasksForDay[0];
           const additionalTasks = tasksForDay.length - 1;
@@ -107,11 +106,11 @@ export function CalendarView() {
                   <div
                     className={cn(
                       'text-xs p-1 rounded truncate cursor-pointer hover:ring-2 transition-all',
-                      priorityColors[firstTask.priority]
+                      firstTask.priority ? priorityColors[firstTask.priority as keyof typeof priorityColors] : priorityColors[4]
                     )}
-                    onClick={() => setSelectedTaskId(firstTask.id)}
+                    onClick={() => firstTask.id && setSelectedTaskId(firstTask.id)}
                   >
-                    {firstTask.title}
+                    {firstTask.taskTitle}
                   </div>
                 )}
                 {additionalTasks > 0 && (
@@ -137,11 +136,11 @@ export function CalendarView() {
                 key={task.id}
                 className={cn(
                   'p-3 rounded-lg cursor-pointer hover:ring-2 transition-all',
-                  priorityColors[task.priority]
+                  task.priority ? priorityColors[task.priority as keyof typeof priorityColors] : priorityColors[4]
                 )}
-                onClick={() => setSelectedTaskId(task.id)}
+                onClick={() => task.id && setSelectedTaskId(task.id)}
               >
-                <div className="font-medium">{task.title}</div>
+                <div className="font-medium">{task.taskTitle}</div>
                 {task.description && (
                   <div className="text-sm mt-1 opacity-80">{task.description}</div>
                 )}

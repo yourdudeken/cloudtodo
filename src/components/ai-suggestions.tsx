@@ -2,7 +2,7 @@ import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Button } from '@/components/ui/button';
 import { useTaskStore } from '@/store/tasks';
-import { AISuggestionsService, TaskSuggestion, TaskUpdate } from '@/lib/ai-suggestions';
+import { AISuggestionsService, TaskSuggestion, /*TaskUpdate*/ } from '@/lib/ai-suggestions';
 import { Sparkles, Plus, RefreshCw, Lightbulb, X, AlertTriangle } from 'lucide-react';
 
 export function AISuggestions() {
@@ -32,9 +32,10 @@ export function AISuggestions() {
 
   const handleAddSuggestion = (suggestion: TaskSuggestion) => {
     addTask({
-      ...suggestion,
-      completed: false,
-      projectId: 'inbox'
+      taskTitle: suggestion.title,
+      description: suggestion.description,
+      categories: suggestion.category ? [suggestion.category] : [],
+      tags: suggestion.tags || []
     });
     setSuggestions(suggestions.filter(s => s.title !== suggestion.title));
   };
@@ -48,7 +49,11 @@ export function AISuggestions() {
     try {
       const updates = await AISuggestionsService.suggestTaskUpdates(task);
       if (Object.keys(updates).length > 0) {
-        updateTask(taskId, updates);
+        const processedUpdates = {
+          ...updates,
+          dueDate: updates.dueDate ? updates.dueDate.toISOString() : undefined
+        };
+        updateTask(taskId, processedUpdates);
       }
     } catch (error) {
       console.error('Error improving task:', error);
@@ -161,11 +166,11 @@ export function AISuggestions() {
                         key={task.id}
                         className="flex items-center justify-between p-2 hover:bg-gray-50 rounded"
                       >
-                        <span className="text-sm truncate">{task.title}</span>
+                        <span className="text-sm truncate">{task.taskTitle}</span>
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleImproveTask(task.id)}
+                          onClick={() => task.id && handleImproveTask(task.id)}
                         >
                           <Sparkles className="h-3 w-3 mr-1" />
                           Improve

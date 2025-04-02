@@ -1,7 +1,7 @@
 import React from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
+//import * as Dialog from '@radix-ui/react-dialog';
 import { Search, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+//import { Button } from '@/components/ui/button';
 import { useTaskStore } from '@/store/tasks';
 import { TaskDetail } from './task-detail';
 
@@ -15,7 +15,7 @@ export function SearchBar() {
     const searchTerms = query.toLowerCase().split(' ');
     
     return tasks.filter(task => {
-      const searchText = `${task.title} ${task.description || ''} ${task.category || ''} ${task.tags?.join(' ') || ''}`.toLowerCase();
+      const searchText = `${task.taskTitle} ${task.description || ''} ${task.categories?.join(' ') || ''} ${task.tags?.join(' ') || ''}`.toLowerCase();
       return searchTerms.every(term => searchText.includes(term));
     });
   }, [query, tasks]);
@@ -59,9 +59,9 @@ export function SearchBar() {
             <div
               key={task.id}
               className="p-2 hover:bg-gray-50 rounded cursor-pointer"
-              onClick={() => setSelectedTaskId(task.id)}
+              onClick={() => task.id && setSelectedTaskId(task.id)}
             >
-              <div className="font-medium">{task.title}</div>
+              <div className="font-medium">{task.taskTitle}</div>
               {task.description && (
                 <div className="text-sm text-gray-500 truncate">
                   {task.description}

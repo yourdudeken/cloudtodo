@@ -1,8 +1,8 @@
-import React from 'react';
+//import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task } from '@/store/tasks';
-import { Calendar, Flag, Tag, Battery as Category } from 'lucide-react';
+import { Calendar, /*Flag,*/ Tag, Battery as Category } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface KanbanTaskProps {

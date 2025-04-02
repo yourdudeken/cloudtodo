@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import /*React,*/ { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 // Import Task type (aliased TaskData)
-import { useTaskStore, Task } from '@/store/tasks';
+import { useTaskStore, /*Task*/ } from '@/store/tasks';
 import { Button } from '@/components/ui/button';
 // Remove unused icons
-import { Circle, CheckCircle2, Calendar, Flag, Plus, Pin, Star, Clock, Tag, Battery as Category, FileIcon, Trash2, Edit2, MoreVertical, Sparkles, Loader2 } from 'lucide-react';
+import { Circle, CheckCircle2, Calendar, Flag, /*Plus,*/ Pin, Star, Clock, Tag, Battery as Category, /*FileIcon,*/ Trash2, Edit2, /*MoreVertical,*/ Sparkles, Loader2 } from 'lucide-react';
 import { format, subHours, parseISO } from 'date-fns'; // Import parseISO
 import { useLocation } from '@/lib/hooks';
 import { CalendarView } from './calendar-view';
 import { KanbanBoard } from './kanban-board';
-import { AISuggestions } from './ai-suggestions';
+//import { AISuggestions } from './ai-suggestions';
 import { SearchBar } from './search-bar';
 import { EditTaskDialog } from './edit-task-dialog';
 import { CollaborativeTasksView } from './collaborative-tasks-view'; // Import CollaborativeTasksView

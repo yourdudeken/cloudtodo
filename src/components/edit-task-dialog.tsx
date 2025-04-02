@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'; // Keep only one Button import
 import { useTaskStore, Task, UIAttachment } from '@/store/tasks';
 import { useNotificationStore } from '@/store/notifications';
 // Import necessary icons, remove duplicates if any
-import { Star, Pin, Calendar as CalendarIcon, Clock, AlertCircle, Tag, Repeat, Battery as Category, Upload, X, Paperclip, Trash2 } from 'lucide-react';
+import { Star, Pin, Calendar as CalendarIcon, Clock, AlertCircle, Tag, /*Repeat,*/ Battery as Category, Upload, X, Paperclip, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns'; // Import parseISO
 import { DayPicker } from 'react-day-picker';
 

@@ -57,7 +57,7 @@ interface Comment {
 
 const mapTaskDataAttachmentsToUI = (taskData: TaskData): UIAttachment[] => {
     const uiAttachments: UIAttachment[] = [];
-    const addAttachments = (ids: string[] | undefined, type: UIAttachment['type'], task: TaskData) => {
+    const addAttachments = (ids: string[] | undefined, type: UIAttachment['type']) => {
         (ids || []).forEach(id => {
             // Placeholder name - ideally fetch real names
             const name = `Attachment (${type}) ${id.substring(0, 6)}`;
@@ -67,10 +67,10 @@ const mapTaskDataAttachmentsToUI = (taskData: TaskData): UIAttachment[] => {
         });
     };
 
-    addAttachments(taskData.attachments?.audio, 'audio', taskData);
-    addAttachments(taskData.attachments?.videos, 'video', taskData);
-    addAttachments(taskData.attachments?.documents, 'document', taskData);
-    addAttachments(taskData.attachments?.images, 'image', taskData);
+    addAttachments(taskData.attachments?.audio, 'audio');
+    addAttachments(taskData.attachments?.videos, 'video');
+    addAttachments(taskData.attachments?.documents, 'document');
+    addAttachments(taskData.attachments?.images, 'image');
 
     return uiAttachments;
 };

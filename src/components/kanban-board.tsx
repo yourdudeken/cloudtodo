@@ -8,10 +8,10 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import {
+/*import {
   SortableContext,
   verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
+} from '@dnd-kit/sortable';*/
 import { useTaskStore } from '@/store/tasks';
 import { KanbanColumn } from './kanban-column';
 import { KanbanTask } from './kanban-task';

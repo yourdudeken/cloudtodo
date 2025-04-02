@@ -137,31 +137,31 @@ function calculateNotificationTime(
  */
 export function scheduleTaskNotification(task: Task): void {
   // Ensure task is not completed and has necessary details
-  if (task.completed || !task.dueDate || !task.reminder) {
+  if (task.status === 'completed' || !task.dueDate || !task.reminder) {
     // console.log(`Not scheduling notification for task ${task.id}: Completed or missing due date/reminder.`);
     return;
   }
 
   // Cancel any existing notification for this task first
-  cancelTaskNotification(task.id);
+  if (task.id) cancelTaskNotification(task.id);
 
   const delay = calculateNotificationTime(task.dueDate, task.dueTime, task.reminder);
 
   if (delay !== null && delay > 0) {
-    console.log(`Scheduling notification for task "${task.title}" (ID: ${task.id}) in ${delay} ms`);
+    console.log(`Scheduling notification for task "${task.taskTitle}" (ID: ${task.id}) in ${delay} ms`);
     const timeoutId = setTimeout(() => {
-      console.log(`Sending notification for task "${task.title}" (ID: ${task.id})`);
-      sendNotification(`Task Reminder: ${task.title}`, {
+      console.log(`Sending notification for task "${task.taskTitle}" (ID: ${task.id})`);
+      sendNotification(`Task Reminder: ${task.taskTitle}`, {
         body: task.description || 'Due soon!',
         // Add other options like icon if needed
          // icon: '/path/to/icon.png'
          tag: task.id, // Use task ID as tag to potentially replace/update notifications
          // renotify: true, // Removed non-standard option
        });
-       scheduledNotifications.delete(task.id); // Remove from map after sending
+       if (task.id) scheduledNotifications.delete(task.id); // Remove from map after sending
      }, delay);
 
-    scheduledNotifications.set(task.id, timeoutId);
+    if (task.id) scheduledNotifications.set(task.id, timeoutId);
   } else {
      // console.log(`Not scheduling notification for task ${task.id}: Calculated time is invalid or in the past.`);
   }
@@ -187,8 +187,8 @@ export function cancelTaskNotification(taskId: string): void {
  */
 export function rescheduleTaskNotification(task: Task): void {
    // console.log(`Rescheduling notification check for task ${task.id}`);
-   cancelTaskNotification(task.id); // Always cancel first
-   if (!task.completed) { // Only schedule if not completed
+   if (task.id) cancelTaskNotification(task.id); // Always cancel first
+   if (task.status !== 'completed') { // Only schedule if not completed
        scheduleTaskNotification(task);
    }
 }
@@ -201,7 +201,7 @@ export function scheduleNotificationsForTasks(tasks: Task[]): void {
    console.log(`Scheduling initial notifications for ${tasks.length} tasks...`);
    tasks.forEach(task => {
        // Check if task is relevant for notification (not completed, has reminder & due date)
-       if (!task.completed && task.dueDate && task.reminder) {
+       if (task.status !== 'completed' && task.dueDate && task.reminder) {
            scheduleTaskNotification(task);
        }
    });

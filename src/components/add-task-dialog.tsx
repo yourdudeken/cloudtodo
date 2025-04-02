@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useTaskStore } from '@/store/tasks'; // Keep Task type import for now, though TaskData is primary
 import { TaskData } from '@/lib/google-drive'; // Import TaskData
 import { useNotificationStore } from '@/store/notifications'; // Import notification store
-import { Plus, Star, Pin, Calendar as CalendarIcon, Clock, AlertCircle, Tag, Repeat, Battery as Category, Upload, X, Users, User, Sparkles, Loader2 } from 'lucide-react';
+import { /*Plus,*/ Star, Pin, Calendar as CalendarIcon, Clock, AlertCircle, Tag, Repeat, Battery as Category, Upload, X, Users, User, Sparkles, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { DayPicker } from 'react-day-picker';
 
@@ -575,6 +575,7 @@ export function AddTaskDialog({ children }: AddTaskDialogProps) { // Destructure
 
             <div className="space-y-2">
               <input
+                placeholder="Attachments (optional)"
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileSelect}
