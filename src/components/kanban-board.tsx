@@ -46,11 +46,11 @@ export function KanbanBoard({ onTaskClick }: KanbanBoardProps) { // Destructure 
     return tasks.filter((task) => {
       switch (status) {
         case 'todo':
-          return !task.completed && !task.tags?.includes('In Progress');
+          return task.status === 'pending' && !task.tags?.includes('In Progress');
         case 'in-progress':
-          return !task.completed && task.tags?.includes('In Progress');
+          return task.status === 'pending' && task.tags?.includes('In Progress');
         case 'completed':
-          return task.completed;
+          return task.status === 'completed';
       }
     });
   };
@@ -71,24 +71,25 @@ export function KanbanBoard({ onTaskClick }: KanbanBoardProps) { // Destructure 
     switch (newStatus) {
       case 'todo':
         updatedTask = {
-          completed: false,
+          status: 'pending',
           tags: task.tags?.filter((tag) => tag !== 'In Progress'),
         };
         break;
       case 'in-progress':
         updatedTask = {
-          completed: false,
+          status: 'pending',
           tags: [...(task.tags || []), 'In Progress'],
         };
         break;
       case 'completed':
         updatedTask = {
-          completed: true,
+          status: 'completed',
           tags: task.tags?.filter((tag) => tag !== 'In Progress'),
         };
         break;
     }
 
+    // Update both local state and Google Drive
     updateTask(taskId, updatedTask);
     setActiveId(null);
   };
@@ -96,8 +97,8 @@ export function KanbanBoard({ onTaskClick }: KanbanBoardProps) { // Destructure 
   const activeTask = activeId ? tasks.find((task) => task.id === activeId) : null;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-semibold mb-8">Kanban Board</h1>
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      <h1 className="text-xl md:text-2xl font-semibold mb-4 md:mb-8">Kanban Board</h1>
       
       <DndContext
         sensors={sensors}
@@ -105,7 +106,7 @@ export function KanbanBoard({ onTaskClick }: KanbanBoardProps) { // Destructure 
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveId(null)}
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="flex flex-col md:grid md:grid-cols-3 gap-4 md:gap-6 overflow-x-auto">
           <KanbanColumn
             id="todo"
             title="To Do"

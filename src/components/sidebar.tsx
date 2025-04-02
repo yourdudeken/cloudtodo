@@ -39,17 +39,17 @@ export function Sidebar() {
       <Button
         variant="ghost"
         size="icon"
-        className="absolute right-4 top-4 lg:hidden"
+        className="absolute right-4 top-4 md:hidden h-10 w-10"
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
-        <Menu className="h-5 w-5" />
+        <Menu className="h-6 w-6" />
       </Button>
 
       <aside
         className={cn(
           "bg-white border-r border-gray-200 h-screen transition-all duration-300 ease-in-out flex flex-col",
-          isCollapsed ? "w-[60px]" : "w-[240px]",
-          "hidden lg:flex"
+          isCollapsed ? "w-16" : "w-64",
+          "hidden md:flex"
         )}
       >
         {/* Removed User Profile */}
@@ -108,7 +108,7 @@ export function Sidebar() {
       {/* Mobile sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 bg-white border-r border-gray-200 w-[240px] transition-transform duration-300 ease-in-out z-50 lg:hidden flex flex-col",
+          "fixed inset-y-0 left-0 bg-white border-r border-gray-200 w-64 transition-transform duration-300 ease-in-out z-50 md:hidden flex flex-col",
           isCollapsed ? "-translate-x-full" : "translate-x-0"
         )}
       >
