@@ -43,6 +43,8 @@ export interface UIAttachment {
     name: string;
     type: 'audio' | 'video' | 'document' | 'image' | 'other';
     webViewLink?: string;
+    downloadUrl: string;
+    size?: number;
 }
 
 // Define Comment type locally
@@ -63,7 +65,14 @@ const mapTaskDataAttachmentsToUI = (taskData: TaskData): UIAttachment[] => {
             const name = `Attachment (${type}) ${id.substring(0, 6)}`;
             // Placeholder link - ideally fetch real links
             const webViewLink = undefined;
-            uiAttachments.push({ driveFileId: id, name, type, webViewLink });
+            uiAttachments.push({ 
+              driveFileId: id, 
+              name, 
+              type, 
+              webViewLink, 
+              downloadUrl: `https://drive.google.com/uc?id=${id}&export=download`,
+              size: 0
+            });
         });
     };
 
@@ -215,6 +224,25 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         scheduleTaskNotification(newTask);
         scheduleDueTimeTrigger(newTask);
         useNotificationStore.getState().addNotification({ type: 'success', message: `Task "${newTask.taskTitle}" added.` });
+        
+        // Trigger due date notifications if due date is set
+        if (newTask.dueDate) {
+          const { user } = useAuthStore.getState();
+          if (user?.email) {
+            fetch('/api/trigger-notifications', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userEmail: user.email,
+                task: newTask
+              })
+            }).catch(err => {
+              console.error('Failed to trigger notifications:', err);
+            });
+          }
+        }
         return newFileId;
       } else {
         throw new Error('Failed to create task file in Google Drive.');
@@ -254,6 +282,25 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const finalUpdatedTask = get().tasks.find(t => t.id === id)!;
       rescheduleTaskNotification(finalUpdatedTask);
       rescheduleDueTimeTrigger(finalUpdatedTask);
+
+      // Trigger due date notifications if status changed to pending
+      if (updatedStatus === 'pending' && task.dueDate) {
+        const { user } = useAuthStore.getState();
+        if (user?.email) {
+          fetch('/api/trigger-notifications', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userEmail: user.email,
+              task: finalUpdatedTask
+            })
+          }).catch(err => {
+            console.error('Failed to trigger notifications:', err);
+          });
+        }
+      }
 
     } catch (error) {
       console.error('Error toggling task status:', error);
@@ -324,6 +371,25 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const finalUpdatedTask = get().tasks.find(t => t.id === id)!;
       rescheduleTaskNotification(finalUpdatedTask);
       rescheduleDueTimeTrigger(finalUpdatedTask);
+
+      // Trigger notifications if due date was updated
+      if (updatedFields.dueDate) {
+        const { user } = useAuthStore.getState();
+        if (user?.email) {
+          fetch('/api/trigger-notifications', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userEmail: user.email,
+              task: finalUpdatedTask
+            })
+          }).catch(err => {
+            console.error('Failed to trigger notifications:', err);
+          });
+        }
+      }
 
     } catch (error) {
       console.error('Error updating task:', error);
@@ -460,7 +526,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
             driveFileId: attachmentDriveId,
             name: file.name,
             type: attachmentFolderType.toLowerCase() as UIAttachment['type'],
-            webViewLink: webViewLink
+            webViewLink: webViewLink,
+            downloadUrl: `https://drive.google.com/uc?id=${attachmentDriveId}&export=download`,
+            size: file.size
         };
 
         set((state) => {

@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { config } from 'dotenv';
 // Import transporter and date-fns
-import { transporter } from './notification-service.js';
+import { notificationService, transporter } from './notification-service.js';
 import { format, parseISO } from 'date-fns';
 
 config();
@@ -159,8 +159,93 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start server
-const PORT = process.env.PORT || 3000;
-httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Notification trigger endpoint with enhanced error handling
+app.post('/api/trigger-notifications', express.json(), async (req, res) => {
+  console.log('Received notification request:', req.body);
+  try {
+    const { userEmail, task } = req.body;
+    if (!userEmail || !task) {
+      console.warn('Invalid request - missing userEmail or task');
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        details: !userEmail ? 'Missing userEmail' : 'Missing task data'
+      });
+    }
+
+    const requiredTaskFields = ['id', 'taskTitle', 'dueDate'];
+    const missingFields = requiredTaskFields.filter(field => !task[field]);
+    if (missingFields.length > 0) {
+      console.warn('Invalid task data - missing fields:', missingFields);
+      return res.status(400).json({
+        error: 'Invalid task data',
+        details: `Missing required fields: ${missingFields.join(', ')}`
+      });
+    }
+
+    console.log('Triggering notifications for task:', task.id);
+    
+    const result = await notificationService.triggerDueNotifications(
+      userEmail,
+      {
+        id: task.id,
+        taskTitle: task.taskTitle,
+        dueDate: task.dueDate,
+        dueTime: task.dueTime || null,
+        priority: task.priority || 3,
+        description: task.description || ''
+      }
+    );
+
+    console.log('Notification result:', result);
+    
+    if (result?.success) {
+      return res.status(200).json({ 
+        success: true,
+        message: 'Notifications triggered successfully'
+      });
+    }
+    
+    return res.status(500).json({ 
+      error: result?.error || 'Notification service failed',
+      details: result?.details || 'Unknown error occurred'
+    });
+    
+  } catch (error) {
+    console.error('Notification endpoint failed:', {
+      error: error.message,
+      stack: error.stack,
+      time: new Date().toISOString()
+    });
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error.message
+    });
+  }
 });
+
+// Start server with error handling
+const PORT = process.env.PORT || 3000;
+const startServer = async () => {
+  try {
+    httpServer.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+    
+    httpServer.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use. Trying alternative port...`);
+        httpServer.listen(0, () => {
+          console.log(`Server running on alternative port ${httpServer.address().port}`);
+        });
+      } else {
+        console.error('Server error:', error);
+        process.exit(1);
+      }
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();

@@ -69,11 +69,32 @@ export function sendNotification(title: string, options?: NotificationOptions): 
   }
 }
 
-// --- Reminder Scheduling Logic ---
-import { Task } from '@/store/tasks'; // Import Task type
+// --- Type Declarations ---
+import { Task } from '@/store/tasks';
+declare global {
+  interface Window {
+    socket?: {
+      emit: (event: string, data: any) => void;
+    };
+  }
+}
 
-// Store timeout IDs for scheduled notifications (using NodeJS.Timeout for browser compatibility)
-const scheduledNotifications = new Map<string, NodeJS.Timeout>(); // taskId -> timeoutId
+// Store notification data for cross-device coordination
+interface NotificationData {
+  timeoutId: NodeJS.Timeout;
+  lastUpdated: number;
+  devices: Set<string>; // Track which devices have acknowledged
+}
+
+const scheduledNotifications = new Map<string, NotificationData>(); // taskId -> NotificationData
+const deviceId = crypto.randomUUID(); // Unique ID for this browser instance
+
+// Register service worker if supported
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js')
+    .then(reg => console.log('Service Worker registered', reg))
+    .catch(err => console.log('Service Worker registration failed', err));
+}
 
 /**
  * Calculates the time in milliseconds until a notification should be triggered.
@@ -132,14 +153,24 @@ function calculateNotificationTime(
 }
 
 /**
- * Schedules a browser notification for a specific task reminder.
+ * Schedules a browser notification for a specific task reminder,
+ * with cross-device synchronization capability.
  * @param task The task object.
  */
 export function scheduleTaskNotification(task: Task): void {
-  // Ensure task is not completed and has necessary details
   if (task.status === 'completed' || !task.dueDate || !task.reminder) {
-    // console.log(`Not scheduling notification for task ${task.id}: Completed or missing due date/reminder.`);
     return;
+  }
+
+  // Broadcast to other devices via WebSocket if socket is available
+  if (window.socket) {
+    window.socket.emit('scheduleNotification', {
+      taskId: task.id,
+      dueDate: task.dueDate,
+      dueTime: task.dueTime,
+      reminder: task.reminder,
+      deviceId
+    });
   }
 
   // Cancel any existing notification for this task first
@@ -161,7 +192,11 @@ export function scheduleTaskNotification(task: Task): void {
        if (task.id) scheduledNotifications.delete(task.id); // Remove from map after sending
      }, delay);
 
-    if (task.id) scheduledNotifications.set(task.id, timeoutId);
+    if (task.id) scheduledNotifications.set(task.id, {
+      timeoutId,
+      lastUpdated: Date.now(),
+      devices: new Set([deviceId])
+    });
   } else {
      // console.log(`Not scheduling notification for task ${task.id}: Calculated time is invalid or in the past.`);
   }
@@ -173,10 +208,17 @@ export function scheduleTaskNotification(task: Task): void {
  */
 export function cancelTaskNotification(taskId: string): void {
   if (scheduledNotifications.has(taskId)) {
-    const timeoutId = scheduledNotifications.get(taskId);
-    clearTimeout(timeoutId);
-    scheduledNotifications.delete(taskId);
-    console.log(`Cancelled scheduled notification for task ${taskId}`);
+    const data = scheduledNotifications.get(taskId);
+    if (data) {
+      clearTimeout(data.timeoutId);
+      scheduledNotifications.delete(taskId);
+      console.log(`Cancelled scheduled notification for task ${taskId}`);
+      
+      // Sync cancellation with other devices
+      if (window.socket) {
+        window.socket.emit('cancelNotification', { taskId });
+      }
+    }
   }
 }
 
@@ -212,8 +254,8 @@ export function scheduleNotificationsForTasks(tasks: Task[]): void {
  */
 export function clearAllScheduledNotifications(): void {
     console.log(`Clearing all ${scheduledNotifications.size} scheduled notifications.`);
-    scheduledNotifications.forEach(timeoutId => {
-        clearTimeout(timeoutId);
+    scheduledNotifications.forEach(data => {
+        clearTimeout(data.timeoutId);
     });
     scheduledNotifications.clear();
 }

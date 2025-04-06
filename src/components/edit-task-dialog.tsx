@@ -420,15 +420,28 @@ export function EditTaskDialog({ taskId, initialSuggestion, onClose }: EditTaskD
                 {uiAttachments.length > 0 ? (
                   uiAttachments.map((att) => (
                   <div key={att.driveFileId} className="flex items-center justify-between text-sm p-2 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
-                    <span className="hover:underline truncate mr-2 flex-grow dark:text-gray-200" title={att.name}>
-                      {att.name}
-                    </span>
+                    <div className="flex items-center gap-2 flex-grow">
+                      <a 
+                        href={att.downloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline truncate dark:text-gray-200"
+                        title={att.name}
+                      >
+                        {att.name}
+                      </a>
+                      {att.size && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          (${(att.size/1024).toFixed(1)} KB)
+                        </span>
+                      )}
+                    </div>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/20 flex-shrink-0"
-                      onClick={() => handleDeleteAttachmentClick(att)} // Use placeholder handler
+                      onClick={() => handleDeleteAttachmentClick(att)}
                       title="Delete attachment"
                       aria-label={`Delete attachment ${att.name}`}
                     >
