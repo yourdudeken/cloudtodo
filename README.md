@@ -45,7 +45,7 @@ VITE_SUPABASE_KEY=your-supabase-key
 
 4. Run the development server:
 ```bash
-npm run dev
+npm run dev:all
 ```
 
 ## Usage
