@@ -41,7 +41,7 @@ export function Header() {
             <span className="text-white font-bold">CT</span>
           </div>
           <h1 className="text-xl font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-            CloudTask
+            cloudtodo
           </h1>
         </div>
 

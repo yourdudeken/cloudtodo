@@ -50,7 +50,7 @@ app.post('/api/send-due-email', async (req, res) => {
   let htmlContent = `<p>Your task "<strong>${taskTitle}</strong>" is due right now (${formattedDueDate}${formattedDueTime}).</p>`;
 
   const mailOptions = {
-    from: `"CloudTask" <${process.env.EMAIL_USER}>`,
+    from: `"cloudtodo" <${process.env.EMAIL_USER}>`,
     to: email, // Use email from request body
     subject,
     html: `
@@ -60,10 +60,10 @@ app.post('/api/send-due-email', async (req, res) => {
         ${htmlContent}
         ${taskDescription ? `<p><strong>Description:</strong> ${taskDescription}</p>` : ''}
         <p style="margin-top: 25px; font-size: 0.9em; color: #6b7280;">
-          You can view this task in the CloudTask app.
+          You can view this task in the cloudtodo app.
         </p>
         <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;">
-        <p style="font-size: 0.8em; color: #9ca3af;">This is an automated message from CloudTask.</p>
+        <p style="font-size: 0.8em; color: #9ca3af;">This is an automated message from cloudtodo.</p>
       </div>
     `,
   };

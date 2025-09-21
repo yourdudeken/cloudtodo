@@ -1,6 +1,6 @@
-# CloudTask - Task Management Web App
+# cloudtodo - Task Management Web App
 
-CloudTask is a modern task management application that helps you organize your work and personal tasks with collaborative features.
+cloudtodo is a modern task management application that helps you organize your work and personal tasks with collaborative features.
 
 ## Key Features
 

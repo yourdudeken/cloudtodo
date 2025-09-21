@@ -2,7 +2,7 @@ import { google } from 'googleapis';
 // Remove CryptoJS import
 // import CryptoJS from 'crypto-js';
 
-const TASKS_FOLDER_NAME = 'CloudTask';
+const TASKS_FOLDER_NAME = 'cloudtodo';
 const TASK_DATA_FILE = 'tasks.json';
 
 export class GoogleDriveService {

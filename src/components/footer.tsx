@@ -9,7 +9,7 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* About Section */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">About CloudTask</h3>
+            <h3 className="text-lg font-semibold">About cloudtodo</h3>
             <p className="text-sm text-gray-600">
               A beautiful and secure way to manage your tasks, seamlessly integrated
               with Google Drive for reliable cloud storage and synchronization.
@@ -73,7 +73,7 @@ export function Footer() {
         <div className="mt-12 pt-8 border-t">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span>© 2024 CloudTask. All rights reserved.</span>
+              <span>© 2024 cloudtodo. All rights reserved.</span>
               <span className="flex items-center gap-1">
                 Made with <Heart className="h-4 w-4 text-red-500 fill-current" /> and
                 <Coffee className="h-4 w-4 text-amber-700" />
