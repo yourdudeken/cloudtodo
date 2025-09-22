@@ -33,16 +33,16 @@ export function Footer() {
             <h3 className="text-lg font-semibold">Resources</h3>
             <ul className="text-sm text-gray-600 space-y-2">
               <li>
-                <a href="#" className="hover:text-blue-600">Documentation</a>
+                <a href="/documentation" className="hover:text-blue-600">Documentation</a>
               </li>
               <li>
-                <a href="#" className="hover:text-blue-600">API Reference</a>
+                <a href="/api-reference" className="hover:text-blue-600">API Reference</a>
               </li>
               <li>
-                <a href="#" className="hover:text-blue-600">Privacy Policy</a>
+                <a href="/privacy-policy" className="hover:text-blue-600">Privacy Policy</a>
               </li>
               <li>
-                <a href="#" className="hover:text-blue-600">Terms of Service</a>
+                <a href="/terms-of-service" className="hover:text-blue-600">Terms of Service</a>
               </li>
             </ul>
           </div>
@@ -63,8 +63,8 @@ export function Footer() {
             </div>
             <div className="text-sm text-gray-600">
               <p>Questions or feedback?</p>
-              <a href="mailto:support@taskmaster.com" className="text-blue-600 hover:underline">
-                support@taskmaster.com
+              <a href="mailto:support@cloudtodo.com" className="text-blue-600 hover:underline">
+                support@cloudtodo.com
               </a>
             </div>
           </div>
