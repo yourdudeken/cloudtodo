@@ -21,7 +21,7 @@ export default function Dashboard() {
             {/* Sidebar */}
             <aside className="w-64 bg-gray-800/50 backdrop-blur-xl border-r border-gray-700/50 flex flex-col hidden md:flex">
                 <div className="p-6">
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                    <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent pb-1 pr-1">
                         CloudTodo
                     </h1>
                 </div>
