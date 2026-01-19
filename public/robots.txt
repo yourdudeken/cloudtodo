@@ -3,4 +3,4 @@ Disallow: /admin
 Disallow: /private
 Allow: /
 
-Sitemap: https://todolisting.vercel.app/sitemap.xml
+Sitemap: https://cloudtodo.vercel.app/sitemap.xml

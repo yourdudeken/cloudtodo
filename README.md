@@ -4,12 +4,12 @@ cloudtodo is a modern task management application that helps you organize your w
 
 ## Key Features
 
-✅ Task management with priorities, due dates and reminders  
-✅ Multiple views (List, Calendar, Kanban board)  
-✅ AI-powered task suggestions  
-✅ Google Drive integration for file attachments  
-✅ Real-time collaboration features  
-✅ Responsive design works on all devices  
+- Task management with priorities, due dates and reminders  
+- Multiple views (List, Calendar, Kanban board)  
+- AI-powered task suggestions  
+- Google Drive integration for file attachments  
+- Real-time collaboration features  
+- Responsive design works on all devices  
 
 ## Technologies
 

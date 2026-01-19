@@ -42,28 +42,28 @@ try {
 // --- Google Drive Service Initialization ---
 let googleDriveService = null;
 try {
-    const clientId = process.env.VITE_GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.VITE_CLIENT_SECRET;
-    const redirectUri = process.env.VITE_REDIRECT_URI;
-    const refreshToken = process.env.VITE_REFRESH_TOKEN;
-    // Remove encryptionKey check
-    // const encryptionKey = process.env.VITE_ENCRYPTION_KEY;
+  const clientId = process.env.VITE_GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.VITE_CLIENT_SECRET;
+  const redirectUri = process.env.VITE_REDIRECT_URI;
+  const refreshToken = process.env.VITE_REFRESH_TOKEN;
+  // Remove encryptionKey check
+  // const encryptionKey = process.env.VITE_ENCRYPTION_KEY;
 
-    // Remove encryptionKey from check
-    if (!clientId || !clientSecret || !redirectUri || !refreshToken) {
-        console.error("Missing Google Drive credentials for Notification Service.");
-    } else {
-        googleDriveService = new GoogleDriveService({
-            clientId,
-            clientSecret,
-            redirectUri,
-            refreshToken,
-            // encryptionKey // Removed
-        });
-        console.log("Google Drive Service initialized for Notification Service (without encryption).");
-    }
+  // Remove encryptionKey from check
+  if (!clientId || !clientSecret || !redirectUri || !refreshToken) {
+    console.error("Missing Google Drive credentials for Notification Service.");
+  } else {
+    googleDriveService = new GoogleDriveService({
+      clientId,
+      clientSecret,
+      redirectUri,
+      refreshToken,
+      // encryptionKey // Removed
+    });
+    console.log("Google Drive Service initialized for Notification Service (without encryption).");
+  }
 } catch (error) {
-    console.error("Failed to initialize Google Drive Service for notifications:", error);
+  console.error("Failed to initialize Google Drive Service for notifications:", error);
 }
 
 
@@ -101,9 +101,9 @@ class NotificationService {
 
     // Safely handle task title and due date
     const sanitizedTitle = task?.title ? task.title.replace(/[^\w\s-]/g, '').substring(0, 50) : 'Untitled Task';
-    const dueDateString = task?.dueDate ? 
-      (typeof task.dueDate === 'string' ? task.dueDate : 
-       (task.dueDate instanceof Date ? task.dueDate.toISOString() : null)) 
+    const dueDateString = task?.dueDate ?
+      (typeof task.dueDate === 'string' ? task.dueDate :
+        (task.dueDate instanceof Date ? task.dueDate.toISOString() : null))
       : null;
     const formattedDueDate = dueDateString ? format(parseISO(dueDateString), 'PPP') : 'No date';
     const formattedDueTime = task.dueTime ? ` at ${task.dueTime}` : '';
@@ -117,20 +117,20 @@ class NotificationService {
     let htmlContent = '';
 
     if (type === 'dueDate') {
-      subject = `🔔 ${task.title} is due ${task.dueTime ? `at ${task.dueTime}` : 'today'}`;
+      subject = `Reminder: ${task.title} is due ${task.dueTime ? `at ${task.dueTime}` : 'today'}`;
       htmlContent = `
         <p>Hi there,</p>
         <p>This is a reminder that your task "<strong>${task.title}</strong>" is due ${task.dueTime ? `at ${task.dueTime} on ${formattedDueDate}` : `today (${formattedDueDate})`}.</p>
         <p><strong>Priority:</strong> ${task.priority ? task.priority : 'Normal'}</p>
       `;
     } else if (type === 'dueTime') {
-      subject = `⏰ ${task.title} is due now!`;
+      subject = `Alert: ${task.title} is due now!`;
       htmlContent = `
         <p>Your task "<strong>${task.title}</strong>" is due now (${formattedDueDate}${formattedDueTime}).</p>
         ${task.description ? `<p><strong>Details:</strong> ${task.description}</p>` : ''}
       `;
     } else if (type === 'dueSoon') {
-      subject = `⏳ ${task.title} due soon`;
+      subject = `Notice: ${task.title} due soon`;
       htmlContent = `
         <p>Your task "<strong>${task.title}</strong>" is coming up in 1 hour (${formattedDueDate}${formattedDueTime}).</p>
       `;
@@ -167,7 +167,7 @@ class NotificationService {
       const timestamp = new Date().toISOString();
       const errorMsg = `Failed to send ${type} notification for task "${task.title}"`;
       console.error(`[${timestamp}] ${errorMsg}:`, error);
-      
+
       // Retry logic for transient errors
       if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
         console.log(`[${timestamp}] Attempting retry for ${to}...`);
@@ -177,15 +177,15 @@ class NotificationService {
           return { success: true, messageId: retryInfo.messageId };
         } catch (retryError) {
           console.error(`[${timestamp}] Retry failed for ${to}:`, retryError);
-          return { 
+          return {
             success: false,
             error: `${errorMsg} (retry failed)`,
             details: retryError.message
           };
         }
       }
-      
-      return { 
+
+      return {
         success: false,
         error: errorMsg,
         details: error.message
@@ -213,13 +213,13 @@ class NotificationService {
   }
 
   cancelBrowserReminder(taskId) {
-     console.log(`Placeholder: Would cancel browser reminder for task ${taskId}`);
+    console.log(`Placeholder: Would cancel browser reminder for task ${taskId}`);
   }
 
   // Enhanced due date notification trigger
   async triggerDueNotifications(userEmail, task) {
     console.log('Triggering notifications for:', { userEmail, taskId: task.id });
-    
+
     if (!userEmail || !userEmail.includes('@')) {
       const err = 'Invalid user email';
       console.error(err);
@@ -274,11 +274,11 @@ class NotificationService {
       }
 
       console.log('Successfully scheduled notifications:', notifications);
-      return { 
+      return {
         success: true,
         notifications
       };
-      
+
     } catch (error) {
       console.error('Notification scheduling failed:', {
         error: error.message,
