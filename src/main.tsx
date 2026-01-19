@@ -1,9 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleOAuthProvider } from '@react-oauth/google'; // Import provider
-import App from './App.tsx';
-import { ErrorBoundary } from './components/error-boundary';
-import './index.css';
+import App from './app/App.tsx';
+import { ErrorBoundary } from './shared/components';
+import './styles/index.css';
 
 // Get Client ID from environment variables
 const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;

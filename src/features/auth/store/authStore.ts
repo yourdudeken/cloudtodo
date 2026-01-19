@@ -2,11 +2,11 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { googleLogout, TokenResponse } from '@react-oauth/google'; // Import googleLogout and TokenResponse
 import axios, { AxiosError } from 'axios'; // Import axios
-import { useTaskStore } from './tasks';
-import { useNotificationStore } from './notifications';
-import { taskCache } from '@/lib/cache';
+import { useTaskStore } from '@/features/tasks/store/tasksStore';
+import { useNotificationStore } from '@/features/notifications/store/notificationsStore';
+import { taskCache } from '@/services/storage';
 // Remove socketService import if no longer needed for auth/user info
-// import { socketService } from '@/lib/socket';
+// import { socketService } from '@/services/socket';
 
 // --- Remove PKCE Helpers ---
 
@@ -99,8 +99,8 @@ export const useAuthStore = create<AuthState>()(
           // Logout if profile fetch fails
           get().logout(); // Call internal logout to clear state
         } finally {
-           // Ensure loading states are reset even if initializeDrive fails
-           set({ isLoadingProfile: false, isLoggingIn: false });
+          // Ensure loading states are reset even if initializeDrive fails
+          set({ isLoadingProfile: false, isLoggingIn: false });
         }
       },
 
@@ -110,8 +110,8 @@ export const useAuthStore = create<AuthState>()(
         const accessToken = get().accessToken;
         if (accessToken) {
           // Revoke token (optional but good practice)
-           axios.post(`https://oauth2.googleapis.com/revoke?token=${accessToken}`)
-             .catch(err => console.error("Token revocation failed:", err));
+          axios.post(`https://oauth2.googleapis.com/revoke?token=${accessToken}`)
+            .catch(err => console.error("Token revocation failed:", err));
         }
         googleLogout(); // Call logout from @react-oauth/google
         // Clear local state
@@ -153,8 +153,8 @@ export const useAuthStore = create<AuthState>()(
 
           // Reset loading flags on rehydration
           if (state) {
-              state.isLoggingIn = false;
-              state.isLoadingProfile = false;
+            state.isLoggingIn = false;
+            state.isLoadingProfile = false;
           }
 
 
@@ -163,9 +163,9 @@ export const useAuthStore = create<AuthState>()(
             console.log('Rehydrated with access token, attempting to fetch profile...');
             // Use setTimeout to ensure this runs after initial setup
             setTimeout(() => {
-                // Check token validity before fetching profile (optional but recommended)
-                // A simple way is just to try fetching the profile
-                state.fetchUserProfile();
+              // Check token validity before fetching profile (optional but recommended)
+              // A simple way is just to try fetching the profile
+              state.fetchUserProfile();
             }, 50); // Small delay
           } else {
             console.log('No access token found during rehydration.');

@@ -1,23 +1,16 @@
 import { useEffect, useState } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Sidebar } from '@/components/sidebar';
-import { TaskList } from '@/components/task-list';
-import { TaskDetail } from '@/components/task-detail';
-import { AuthButton } from '@/components/auth-button';
-import { Footer } from '@/components/footer';
-import { Header } from '@/components/header';
-import { useAuthStore } from '@/store/auth';
-import { useSettingsStore } from '@/store/settings';
-import { socketService } from '@/lib/socket';
-import { taskCache } from '@/lib/cache';
-import { requestNotificationPermission } from '@/lib/browser-notifications';
+import { Header, Footer, Sidebar } from '@/shared/components/layout';
+import { TaskList, TaskDetail } from '@/features/tasks';
+import { AuthButton, useAuthStore } from '@/features/auth';
+import { useSettingsStore } from '@/features/settings';
+import { socketService } from '@/services/socket';
+import { taskCache } from '@/services/storage';
+import { requestNotificationPermission } from '@/features/notifications';
 import { Cloud, ListTodo, Lock, CheckCircle } from 'lucide-react';
-import { SidebarProvider } from '@/lib/sidebar-context';
-import { Documentation } from '@/pages/documentation';
-import { ApiReference } from '@/pages/api-reference';
-import { PrivacyPolicy } from '@/pages/privacy-policy';
-import { TermsOfService } from '@/pages/terms-of-service';
+import { SidebarProvider } from '@/shared/contexts';
+import { Documentation, ApiReference, PrivacyPolicy, TermsOfService } from '@/pages';
 
 function App() {
   // Remove reloadTasks from destructuring
@@ -55,7 +48,7 @@ function App() {
   // Handle theme changes
   useEffect(() => {
     const root = window.document.documentElement;
-    
+
     const setTheme = (theme: 'light' | 'dark') => {
       if (theme === 'dark') {
         root.classList.add('dark');

@@ -1,94 +1,94 @@
 import { create } from 'zustand';
-import { useAuthStore } from './auth';
+import { useAuthStore } from '@/features/auth/store/authStore';
 import {
-    createTask as driveCreateTask,
-    listTasks as driveListTasks,
-    readTask as driveReadTask,
-    updateTask as driveUpdateTask,
-    deleteTask as driveDeleteTask,
-    uploadAttachment as driveUploadAttachment,
-    // Import deleteFile function
-    deleteFile as driveDeleteFile,
-    getOrCreateFolder,
-    ensureAttachmentFoldersExist,
-    TaskData,
-    ROOT_FOLDER_NAME,
-    AUDIO_FOLDER_NAME,
-    VIDEO_FOLDER_NAME,
-    DOCUMENT_FOLDER_NAME,
-    PICTURE_FOLDER_NAME,
-} from '@/lib/google-drive';
-import { useNotificationStore } from './notifications';
-import { taskCache } from '@/lib/cache';
+  createTask as driveCreateTask,
+  listTasks as driveListTasks,
+  readTask as driveReadTask,
+  updateTask as driveUpdateTask,
+  deleteTask as driveDeleteTask,
+  uploadAttachment as driveUploadAttachment,
+  // Import deleteFile function
+  deleteFile as driveDeleteFile,
+  getOrCreateFolder,
+  ensureAttachmentFoldersExist,
+  TaskData,
+  ROOT_FOLDER_NAME,
+  AUDIO_FOLDER_NAME,
+  VIDEO_FOLDER_NAME,
+  DOCUMENT_FOLDER_NAME,
+  PICTURE_FOLDER_NAME,
+} from '@/services/storage/googleDrive';
+import { useNotificationStore } from '@/features/notifications/store/notificationsStore';
+import { taskCache } from '@/services/storage/cache';
 import {
   scheduleTaskNotification,
   cancelTaskNotification,
   rescheduleTaskNotification,
   scheduleNotificationsForTasks,
   clearAllScheduledNotifications,
-} from '@/lib/browser-notifications';
+} from '@/features/notifications/services/browserNotifications';
 import {
   scheduleDueTimeTrigger,
   cancelDueTimeTrigger,
   rescheduleDueTimeTrigger,
   scheduleDueTimeTriggersForTasks,
   clearAllDueTimeTriggers,
-} from '@/lib/due-time-trigger';
+} from '@/features/notifications/services/dueTimeTrigger';
 import mime from 'mime-types';
 
 export type Task = TaskData;
 
 export interface UIAttachment {
-    driveFileId: string;
-    name: string;
-    type: 'audio' | 'video' | 'document' | 'image' | 'other';
-    webViewLink?: string;
-    downloadUrl: string;
-    size?: number;
+  driveFileId: string;
+  name: string;
+  type: 'audio' | 'video' | 'document' | 'image' | 'other';
+  webViewLink?: string;
+  downloadUrl: string;
+  size?: number;
 }
 
 // Define Comment type locally
 interface Comment {
-    id: string;
-    userId: string;
-    userEmail: string;
-    content: string;
-    createdAt: string;
+  id: string;
+  userId: string;
+  userEmail: string;
+  content: string;
+  createdAt: string;
 }
 
 
 const mapTaskDataAttachmentsToUI = (taskData: TaskData): UIAttachment[] => {
-    const uiAttachments: UIAttachment[] = [];
-    const addAttachments = (ids: string[] | undefined, type: UIAttachment['type']) => {
-        (ids || []).forEach(id => {
-            // Placeholder name - ideally fetch real names
-            const name = `Attachment (${type}) ${id.substring(0, 6)}`;
-            // Placeholder link - ideally fetch real links
-            const webViewLink = undefined;
-            uiAttachments.push({ 
-              driveFileId: id, 
-              name, 
-              type, 
-              webViewLink, 
-              downloadUrl: `https://drive.google.com/uc?id=${id}&export=download`,
-              size: 0
-            });
-        });
-    };
+  const uiAttachments: UIAttachment[] = [];
+  const addAttachments = (ids: string[] | undefined, type: UIAttachment['type']) => {
+    (ids || []).forEach(id => {
+      // Placeholder name - ideally fetch real names
+      const name = `Attachment (${type}) ${id.substring(0, 6)}`;
+      // Placeholder link - ideally fetch real links
+      const webViewLink = undefined;
+      uiAttachments.push({
+        driveFileId: id,
+        name,
+        type,
+        webViewLink,
+        downloadUrl: `https://drive.google.com/uc?id=${id}&export=download`,
+        size: 0
+      });
+    });
+  };
 
-    addAttachments(taskData.attachments?.audio, 'audio');
-    addAttachments(taskData.attachments?.videos, 'video');
-    addAttachments(taskData.attachments?.documents, 'document');
-    addAttachments(taskData.attachments?.images, 'image');
+  addAttachments(taskData.attachments?.audio, 'audio');
+  addAttachments(taskData.attachments?.videos, 'video');
+  addAttachments(taskData.attachments?.documents, 'document');
+  addAttachments(taskData.attachments?.images, 'image');
 
-    return uiAttachments;
+  return uiAttachments;
 };
 
 const getAttachmentFolder = (fileType: string): string => {
-    if (fileType.startsWith('audio/')) return AUDIO_FOLDER_NAME;
-    if (fileType.startsWith('video/')) return VIDEO_FOLDER_NAME;
-    if (fileType.startsWith('image/')) return PICTURE_FOLDER_NAME;
-    return DOCUMENT_FOLDER_NAME;
+  if (fileType.startsWith('audio/')) return AUDIO_FOLDER_NAME;
+  if (fileType.startsWith('video/')) return VIDEO_FOLDER_NAME;
+  if (fileType.startsWith('image/')) return PICTURE_FOLDER_NAME;
+  return DOCUMENT_FOLDER_NAME;
 };
 
 
@@ -131,12 +131,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   initializeDrive: async () => {
     if (get().isLoading) {
-        console.log('Drive initialization already in progress. Skipping.');
-        return;
+      console.log('Drive initialization already in progress. Skipping.');
+      return;
     }
     if (get().cloudTaskFolderId) {
-        console.log('Drive already initialized (folder ID present).');
-        return;
+      console.log('Drive already initialized (folder ID present).');
+      return;
     }
     const { accessToken } = useAuthStore.getState();
     if (!accessToken) {
@@ -187,8 +187,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       console.error('Error initializing Google Drive:', error);
       useNotificationStore.getState().addNotification({ type: 'error', message: `Drive Connection Error: ${error instanceof Error ? error.message : 'Unknown error'}` });
     } finally {
-        set({ isLoading: false });
-        console.log('Drive initialization finished (success or error).');
+      set({ isLoading: false });
+      console.log('Drive initialization finished (success or error).');
     }
   },
 
@@ -201,9 +201,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
 
     const taskDataWithDefaults = {
-        ...taskData,
-        attachments: { audio: [], videos: [], documents: [], images: [] },
-        comments: []
+      ...taskData,
+      attachments: { audio: [], videos: [], documents: [], images: [] },
+      comments: []
     };
 
     try {
@@ -224,7 +224,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         scheduleTaskNotification(newTask);
         scheduleDueTimeTrigger(newTask);
         useNotificationStore.getState().addNotification({ type: 'success', message: `Task "${newTask.taskTitle}" added.` });
-        
+
         // Trigger due date notifications if due date is set
         if (newTask.dueDate) {
           const { user } = useAuthStore.getState();
@@ -272,11 +272,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
       const driveUpdateResult = await driveUpdateTask(accessToken, id, updatePayload);
       if (!driveUpdateResult) {
-          throw new Error('Google Drive update failed.');
+        throw new Error('Google Drive update failed.');
       }
 
       set((state) => ({
-          tasks: state.tasks.map(t => t.id === id ? { ...t, ...driveUpdateResult } : t)
+        tasks: state.tasks.map(t => t.id === id ? { ...t, ...driveUpdateResult } : t)
       }));
       taskCache.setTasks(get().tasks);
       const finalUpdatedTask = get().tasks.find(t => t.id === id)!;
@@ -322,8 +322,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     try {
       set((state) => ({
-          tasks: originalTasks.filter(task => task.id !== id),
-          uiAttachments: Object.fromEntries(Object.entries(state.uiAttachments).filter(([taskId]) => taskId !== id))
+        tasks: originalTasks.filter(task => task.id !== id),
+        uiAttachments: Object.fromEntries(Object.entries(state.uiAttachments).filter(([taskId]) => taskId !== id))
       }));
       taskCache.setTasks(get().tasks);
       cancelTaskNotification(id);
@@ -361,11 +361,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
       const driveUpdateResult = await driveUpdateTask(accessToken, id, updatedFields);
       if (!driveUpdateResult) {
-          throw new Error('Google Drive update failed.');
+        throw new Error('Google Drive update failed.');
       }
 
       set((state) => ({
-          tasks: state.tasks.map(t => t.id === id ? { ...t, ...driveUpdateResult } : t)
+        tasks: state.tasks.map(t => t.id === id ? { ...t, ...driveUpdateResult } : t)
       }));
       taskCache.setTasks(get().tasks);
       const finalUpdatedTask = get().tasks.find(t => t.id === id)!;
@@ -464,94 +464,94 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     const { accessToken } = useAuthStore.getState();
     const { cloudTaskFolderId } = get();
     if (!accessToken || !cloudTaskFolderId) {
-        useNotificationStore.getState().addNotification({ type: 'error', message: 'Cannot upload: Drive not initialized.' });
-        return;
+      useNotificationStore.getState().addNotification({ type: 'error', message: 'Cannot upload: Drive not initialized.' });
+      return;
     }
 
     const originalTasks = get().tasks;
     const taskToUpdate = originalTasks.find(t => t.id === taskId);
     if (!taskToUpdate || !taskToUpdate.id) {
-        useNotificationStore.getState().addNotification({ type: 'error', message: 'Cannot upload: Task not found.' });
-        return;
+      useNotificationStore.getState().addNotification({ type: 'error', message: 'Cannot upload: Task not found.' });
+      return;
     }
 
     const fileType = file.type || mime.lookup(file.name) || 'application/octet-stream';
     const attachmentFolderType = getAttachmentFolder(fileType);
 
     const folderNameMap: { [key: string]: string } = {
-        [AUDIO_FOLDER_NAME]: AUDIO_FOLDER_NAME,
-        [VIDEO_FOLDER_NAME]: VIDEO_FOLDER_NAME,
-        [DOCUMENT_FOLDER_NAME]: DOCUMENT_FOLDER_NAME,
-        [PICTURE_FOLDER_NAME]: PICTURE_FOLDER_NAME,
+      [AUDIO_FOLDER_NAME]: AUDIO_FOLDER_NAME,
+      [VIDEO_FOLDER_NAME]: VIDEO_FOLDER_NAME,
+      [DOCUMENT_FOLDER_NAME]: DOCUMENT_FOLDER_NAME,
+      [PICTURE_FOLDER_NAME]: PICTURE_FOLDER_NAME,
     };
     const attachmentFolderName = folderNameMap[attachmentFolderType];
 
     if (!attachmentFolderName) {
-        console.error(`Invalid attachment folder type determined: ${attachmentFolderType}`);
-        useNotificationStore.getState().addNotification({ type: 'error', message: 'Could not determine attachment category.' });
-        return;
+      console.error(`Invalid attachment folder type determined: ${attachmentFolderType}`);
+      useNotificationStore.getState().addNotification({ type: 'error', message: 'Could not determine attachment category.' });
+      return;
     }
 
     try {
-        useNotificationStore.getState().addNotification({ type: 'info', message: `Uploading ${file.name}...` });
+      useNotificationStore.getState().addNotification({ type: 'info', message: `Uploading ${file.name}...` });
 
-        const attachmentFolderId = await getOrCreateFolder(accessToken, attachmentFolderName, cloudTaskFolderId);
-        if (!attachmentFolderId) {
-            throw new Error(`Failed to get or create attachment folder '${attachmentFolderName}'.`);
+      const attachmentFolderId = await getOrCreateFolder(accessToken, attachmentFolderName, cloudTaskFolderId);
+      if (!attachmentFolderId) {
+        throw new Error(`Failed to get or create attachment folder '${attachmentFolderName}'.`);
+      }
+
+      const uploadResult = await driveUploadAttachment(accessToken, file, attachmentFolderId);
+      if (!uploadResult) {
+        throw new Error('File upload to Google Drive failed.');
+      }
+      const { id: attachmentDriveId, webViewLink } = uploadResult;
+
+      const attachmentKey = `${attachmentFolderType.toLowerCase()}s` as keyof TaskData['attachments'];
+      const currentAttachments = taskToUpdate.attachments || { audio: [], images: [], documents: [], videos: [] };
+      const updatedAttachmentList = [...(currentAttachments[attachmentKey] || []), attachmentDriveId];
+      const taskUpdatePayload = {
+        attachments: {
+          ...currentAttachments,
+          [attachmentKey]: updatedAttachmentList,
         }
+      };
 
-        const uploadResult = await driveUploadAttachment(accessToken, file, attachmentFolderId);
-        if (!uploadResult) {
-            throw new Error('File upload to Google Drive failed.');
-        }
-        const { id: attachmentDriveId, webViewLink } = uploadResult;
+      const driveUpdateResult = await driveUpdateTask(accessToken, taskId, taskUpdatePayload);
+      if (!driveUpdateResult) {
+        console.error(`Failed to update task JSON for task ${taskId} after uploading attachment ${attachmentDriveId}. Attachment may be orphaned.`);
+        throw new Error('Failed to update task metadata after upload.');
+      }
 
-        const attachmentKey = `${attachmentFolderType.toLowerCase()}s` as keyof TaskData['attachments'];
-        const currentAttachments = taskToUpdate.attachments || { audio: [], images: [], documents: [], videos: [] };
-        const updatedAttachmentList = [...(currentAttachments[attachmentKey] || []), attachmentDriveId];
-        const taskUpdatePayload = {
-            attachments: {
-                ...currentAttachments,
-                [attachmentKey]: updatedAttachmentList,
-            }
+      const newUIAttachment: UIAttachment = {
+        driveFileId: attachmentDriveId,
+        name: file.name,
+        type: attachmentFolderType.toLowerCase() as UIAttachment['type'],
+        webViewLink: webViewLink,
+        downloadUrl: `https://drive.google.com/uc?id=${attachmentDriveId}&export=download`,
+        size: file.size
+      };
+
+      set((state) => {
+        const currentTaskIndex = state.tasks.findIndex(t => t.id === taskId);
+        if (currentTaskIndex === -1) return {};
+
+        const updatedTasks = [...state.tasks];
+        updatedTasks[currentTaskIndex] = {
+          ...updatedTasks[currentTaskIndex],
+          ...driveUpdateResult
         };
 
-        const driveUpdateResult = await driveUpdateTask(accessToken, taskId, taskUpdatePayload);
-        if (!driveUpdateResult) {
-            console.error(`Failed to update task JSON for task ${taskId} after uploading attachment ${attachmentDriveId}. Attachment may be orphaned.`);
-            throw new Error('Failed to update task metadata after upload.');
-        }
+        const updatedUIAttachmentsMap = { ...state.uiAttachments };
+        updatedUIAttachmentsMap[taskId] = [...(updatedUIAttachmentsMap[taskId] || []), newUIAttachment];
 
-        const newUIAttachment: UIAttachment = {
-            driveFileId: attachmentDriveId,
-            name: file.name,
-            type: attachmentFolderType.toLowerCase() as UIAttachment['type'],
-            webViewLink: webViewLink,
-            downloadUrl: `https://drive.google.com/uc?id=${attachmentDriveId}&export=download`,
-            size: file.size
+        return {
+          tasks: updatedTasks,
+          uiAttachments: updatedUIAttachmentsMap
         };
+      });
+      taskCache.setTasks(get().tasks);
 
-        set((state) => {
-            const currentTaskIndex = state.tasks.findIndex(t => t.id === taskId);
-            if (currentTaskIndex === -1) return {};
-
-            const updatedTasks = [...state.tasks];
-            updatedTasks[currentTaskIndex] = {
-                ...updatedTasks[currentTaskIndex],
-                ...driveUpdateResult
-            };
-
-            const updatedUIAttachmentsMap = { ...state.uiAttachments };
-            updatedUIAttachmentsMap[taskId] = [...(updatedUIAttachmentsMap[taskId] || []), newUIAttachment];
-
-            return {
-                tasks: updatedTasks,
-                uiAttachments: updatedUIAttachmentsMap
-            };
-        });
-        taskCache.setTasks(get().tasks);
-
-        useNotificationStore.getState().addNotification({ type: 'success', message: `Attachment "${file.name}" uploaded.` });
+      useNotificationStore.getState().addNotification({ type: 'success', message: `Attachment "${file.name}" uploaded.` });
 
     } catch (error) {
       console.error('Error uploading attachment:', error);
@@ -567,8 +567,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       return;
     }
     if (!taskId || !attachmentId) {
-        console.error("deleteAttachment: Missing taskId or attachmentId");
-        return;
+      console.error("deleteAttachment: Missing taskId or attachmentId");
+      return;
     }
 
     const originalTasks = get().tasks;
@@ -583,10 +583,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     // Optimistic UI Update
     set((state) => ({
-        uiAttachments: {
-            ...state.uiAttachments,
-            [taskId]: state.uiAttachments[taskId]?.filter(a => a.driveFileId !== attachmentId) || []
-        }
+      uiAttachments: {
+        ...state.uiAttachments,
+        [taskId]: state.uiAttachments[taskId]?.filter(a => a.driveFileId !== attachmentId) || []
+      }
     }));
 
     try {
@@ -602,22 +602,22 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       let found = false;
       // Iterate over attachment types (audio, images, etc.)
       for (const key in updatedAttachments) {
-          const typedKey = key as keyof TaskData['attachments'];
-          if (Array.isArray(updatedAttachments[typedKey])) {
-              const index = updatedAttachments[typedKey]!.indexOf(attachmentId);
-              if (index > -1) {
-                  // Create a new array without the deleted ID
-                  updatedAttachments[typedKey] = updatedAttachments[typedKey]!.filter(id => id !== attachmentId);
-                  found = true;
-                  break; // Assume ID is unique across types
-              }
+        const typedKey = key as keyof TaskData['attachments'];
+        if (Array.isArray(updatedAttachments[typedKey])) {
+          const index = updatedAttachments[typedKey]!.indexOf(attachmentId);
+          if (index > -1) {
+            // Create a new array without the deleted ID
+            updatedAttachments[typedKey] = updatedAttachments[typedKey]!.filter(id => id !== attachmentId);
+            found = true;
+            break; // Assume ID is unique across types
           }
+        }
       }
 
       if (!found) {
-          console.warn(`[deleteAttachment] Attachment ID ${attachmentId} not found in task ${taskId} attachments object.`);
-          useNotificationStore.getState().addNotification({ type: 'success', message: `Deleted attachment ${attachmentToDelete.name}.` });
-          return; // Exit early if ID wasn't in the task JSON anyway
+        console.warn(`[deleteAttachment] Attachment ID ${attachmentId} not found in task ${taskId} attachments object.`);
+        useNotificationStore.getState().addNotification({ type: 'success', message: `Deleted attachment ${attachmentToDelete.name}.` });
+        return; // Exit early if ID wasn't in the task JSON anyway
       }
 
       const taskUpdatePayload = { attachments: updatedAttachments };
