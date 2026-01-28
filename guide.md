@@ -19,7 +19,7 @@
 - Revoke access anytime from your Google Account settings
 
 ###  **Smart Organization**
-- Automatic folder structure in Google Drive (`CLOUDTASK/`)
+- Automatic folder structure in Google Drive (`CLOUDTODO/`)
 - Organized attachment folders (AUDIOS, VIDEOS, DOCUMENTS, PICTURES)
 - Each task is a separate JSON file for easy backup and portability
 
@@ -38,7 +38,7 @@
 
 ```
 User's Google Drive
-└── CLOUDTASK/                    # Root folder for all tasks
+└── CLOUDTODO/                    # Root folder for all tasks
     ├── task1.json                # Individual task files
     ├── task2.json
     ├── task3.json
@@ -55,8 +55,8 @@ User's Google Drive
 ### Data Flow
 
 1. **Authentication**: User logs in with Google OAuth 2.0
-2. **Initialization**: App creates `CLOUDTASK` folder in user's Drive
-3. **Task Creation**: New tasks saved as JSON files in `CLOUDTASK/`
+2. **Initialization**: App creates `CLOUDTODO` folder in user's Drive
+3. **Task Creation**: New tasks saved as JSON files in `CLOUDTODO/`
 4. **Attachments**: Files uploaded to appropriate subfolders
 5. **Sync**: Changes immediately reflected in Google Drive
 6. **Offline**: Local cache for offline access, syncs when online
@@ -156,7 +156,7 @@ Visit `http://localhost:5173` in your browser.
 
 1. Click "Sign in with Google"
 2. Authorize the app to access your Google Drive
-3. App automatically creates `CLOUDTASK` folder
+3. App automatically creates `CLOUDTODO` folder
 4. Start creating tasks!
 
 ## Usage Guide

@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3';
 const UPLOAD_API_URL = 'https://www.googleapis.com/upload/drive/v3';
 
-const ROOT_FOLDER_NAME = 'CLOUDTASK';
+const ROOT_FOLDER_NAME = 'CLOUDTODO';
 const SUBFOLDERS = {
     AUDIOS: 'AUDIOS',
     VIDEOS: 'VIDEOS',
