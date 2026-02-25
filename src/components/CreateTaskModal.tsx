@@ -29,7 +29,8 @@ export function CreateTaskModal() {
         categories: '',
         isStarred: false,
         isPinned: false,
-        isPersonal: true
+        isPersonal: true,
+        collaboratorEmail: ''
     });
 
     const [files, setFiles] = useState<File[]>([]);
@@ -73,7 +74,7 @@ export function CreateTaskModal() {
                 else attachments.documents.push(item);
             }
 
-            await addTask({
+            const savedTask = await addTask({
                 taskTitle: formData.title,
                 description: formData.description,
                 dueDate: formData.dueDate,
@@ -96,6 +97,11 @@ export function CreateTaskModal() {
                 updatedDate: new Date().toISOString(),
             });
 
+            // If collaborative and email provided, share the file
+            if (!formData.isPersonal && formData.collaboratorEmail && savedTask.googleDriveFileId) {
+                await googleDriveService.shareFile(savedTask.googleDriveFileId, formData.collaboratorEmail);
+            }
+
             setOpen(false);
             setFormData({
                 title: '',
@@ -106,7 +112,8 @@ export function CreateTaskModal() {
                 categories: '',
                 isStarred: false,
                 isPinned: false,
-                isPersonal: true
+                isPersonal: true,
+                collaboratorEmail: ''
             });
             setFiles([]);
         } catch (error) {
@@ -213,6 +220,22 @@ export function CreateTaskModal() {
                             </button>
                         </div>
                     </div>
+
+                    {!formData.isPersonal && (
+                        <div className="grid gap-2 animate-in slide-in-from-top-4 duration-500 fade-in">
+                            <Label htmlFor="collaboratorEmail" className="text-[10px] font-black uppercase tracking-widest text-indigo-400 ml-1">Collaborator Email</Label>
+                            <Input
+                                id="collaboratorEmail"
+                                type="email"
+                                value={formData.collaboratorEmail}
+                                onChange={(e) => setFormData({ ...formData, collaboratorEmail: e.target.value })}
+                                placeholder="teammate@example.com"
+                                required={!formData.isPersonal}
+                                className="bg-indigo-500/5 border-indigo-500/20 rounded-xl h-12 focus:ring-indigo-500/20 focus:border-indigo-500/40"
+                            />
+                            <p className="text-[9px] text-gray-400 ml-1 italic">They will be granted write access via Google Drive.</p>
+                        </div>
+                    )}
                     <div className="grid gap-2">
                         <Label className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Priority Level</Label>
                         <div className="grid grid-cols-3 gap-3">
@@ -294,7 +317,7 @@ export function CreateTaskModal() {
                         </Button>
                     </DialogFooter>
                 </form>
-            </DialogContent>
-        </Dialog>
+            </DialogContent >
+        </Dialog >
     );
 }

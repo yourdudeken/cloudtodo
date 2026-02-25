@@ -11,7 +11,7 @@ interface TasksState {
     isLoading: boolean;
     error: string | null;
     fetchTasks: () => Promise<void>;
-    addTask: (task: Omit<Task, 'id' | 'googleDriveFileId'>) => Promise<void>;
+    addTask: (task: Omit<Task, 'id' | 'googleDriveFileId'>) => Promise<Task>;
     updateTask: (task: Task) => Promise<void>;
     updateTaskStatus: (id: string, status: Task['status']) => Promise<void>;
     deleteTask: (id: string, fileId: string) => Promise<void>;
@@ -57,9 +57,11 @@ export const useTasksStore = create<TasksState>()(
                         tasks: [...state.tasks, savedTask],
                         isLoading: false
                     }));
+                    return savedTask;
                 } catch (error) {
                     console.error('Failed to add task:', error);
                     set({ error: 'Failed to add task', isLoading: false });
+                    throw error;
                 }
             },
 

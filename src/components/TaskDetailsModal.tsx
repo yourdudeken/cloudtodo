@@ -12,7 +12,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Loader2, Upload, File as FileIcon, Plus, ArrowRight, Music, Video, Edit2, Check, X, Trash2, Paperclip, ImageIcon, Star, Pin } from 'lucide-react';
+import {
+    Loader2, File as FileIcon, Plus, ArrowRight, Music, Video,
+    Edit2, Check, X, Trash2, Paperclip, ImageIcon, Star, Pin,
+    Users, Send, UserMinus, User
+} from 'lucide-react';
 
 function DriveImage({ fileId, alt }: { fileId: string; alt: string }) {
     const [url, setUrl] = useState<string | null>(null);
@@ -65,7 +69,6 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
     const { updateTask } = useTasksStore();
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
 
     // Form state for editing
     const [editForm, setEditForm] = useState<Partial<Task>>({});
@@ -85,6 +88,50 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
     const getAttachmentName = (item: string | AttachmentItem, fallback: string = 'Resource') => {
         if (typeof item === 'string') return `${fallback} ${item.slice(0, 8)}`;
         return item.name || `${fallback} ${item.id.slice(0, 8)}`;
+    };
+
+    const [permissions, setPermissions] = useState<any[]>([]);
+    const [isSharing, setIsSharing] = useState(false);
+    const [inviteEmail, setInviteEmail] = useState('');
+
+    useEffect(() => {
+        if (task?.googleDriveFileId) {
+            fetchPermissions();
+        }
+    }, [task?.googleDriveFileId]);
+
+    const fetchPermissions = async () => {
+        if (!task?.googleDriveFileId) return;
+        try {
+            const perms = await googleDriveService.getPermissions(task.googleDriveFileId);
+            setPermissions(perms || []);
+        } catch (error) {
+            console.error('Failed to fetch permissions:', error);
+        }
+    };
+
+    const handleInvite = async () => {
+        if (!inviteEmail || !task?.googleDriveFileId) return;
+        setIsSharing(true);
+        try {
+            await googleDriveService.shareFile(task.googleDriveFileId, inviteEmail);
+            setInviteEmail('');
+            await fetchPermissions();
+        } catch (error) {
+            console.error('Failed to share file:', error);
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
+    const handleRemovePermission = async (permId: string) => {
+        if (!task?.googleDriveFileId) return;
+        try {
+            await googleDriveService.removePermission(task.googleDriveFileId, permId);
+            await fetchPermissions();
+        } catch (error) {
+            console.error('Failed to remove permission:', error);
+        }
     };
 
     if (!task) return null;
@@ -217,6 +264,19 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                         {task.priority === 1 ? 'High Priority' : task.priority === 2 ? 'Normal Priority' : 'Low Priority'}
                                     </span>
                                 )}
+                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
+                                    {task.taskType.isPersonal ? (
+                                        <>
+                                            <User className="w-3 h-3 text-gray-500" />
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Solo Mission</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Users className="w-3 h-3 text-indigo-400" />
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Team Effort</span>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
@@ -311,6 +371,57 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                 </div>
                             )}
                         </div>
+
+                        {task.taskType.isCollaborative && (
+                            <div className="grid gap-4 mt-8 animate-in slide-in-from-bottom-2 duration-500">
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-400 flex items-center gap-2">
+                                    <Users className="w-3 h-3" />
+                                    Collaborative Sync
+                                </h4>
+                                <div className="space-y-4">
+                                    <div className="flex flex-wrap gap-3">
+                                        {permissions.map((perm) => (
+                                            <div key={perm.id} className="flex items-center gap-3 px-4 py-2 bg-indigo-500/5 border border-indigo-500/10 rounded-[1rem] group transition-all hover:border-indigo-500/30">
+                                                <div className="w-8 h-8 rounded-full bg-indigo-600/20 flex items-center justify-center font-black text-indigo-400 border border-indigo-500/20 text-xs">
+                                                    {perm.emailAddress?.charAt(0).toUpperCase() || 'U'}
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-bold text-white max-w-[200px] truncate">{perm.emailAddress}</span>
+                                                    <span className="text-[8px] font-black uppercase tracking-widest text-gray-500">{perm.role}</span>
+                                                </div>
+                                                {perm.role !== 'owner' && (
+                                                    <button
+                                                        onClick={() => handleRemovePermission(perm.id)}
+                                                        className="ml-2 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-gray-600 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
+                                                    >
+                                                        <UserMinus className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {isEditing && (
+                                        <div className="flex gap-2 max-w-md animate-in fade-in duration-300">
+                                            <Input
+                                                type="email"
+                                                placeholder="Invite by email..."
+                                                value={inviteEmail}
+                                                onChange={(e) => setInviteEmail(e.target.value)}
+                                                className="bg-white/5 border-white/10 h-11 rounded-xl text-sm"
+                                            />
+                                            <Button
+                                                onClick={handleInvite}
+                                                disabled={isSharing || !inviteEmail}
+                                                className="bg-indigo-600 hover:bg-indigo-700 h-11 px-5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                                            >
+                                                {isSharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         <div className="border-t border-white/5 pt-12">
                             <div className="flex items-center justify-between mb-8">

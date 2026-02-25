@@ -228,6 +228,10 @@ export default function Dashboard() {
                                                 </span>
                                                 {task.isPinned && <Pin className="w-3.5 h-3.5 text-blue-400 fill-blue-400/20" />}
                                                 {task.isStarred && <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500/20" />}
+                                                {task.taskType.isPersonal ?
+                                                    <User className="w-3.5 h-3.5 text-gray-500" /> :
+                                                    <User className="w-3.5 h-3.5 text-indigo-400" />
+                                                }
                                             </div>
                                             <span className="text-[11px] font-medium text-gray-500">{task.dueDate || 'No date'}</span>
                                         </div>
