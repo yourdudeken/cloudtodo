@@ -6,12 +6,17 @@ import { googleDriveService } from '@/lib/googleDrive';
 interface TasksState {
     tasks: Task[];
     folderIds: Record<string, string> | null;
+    viewMode: 'grid' | 'kanban';
+    selectedCategory: string | null;
     isLoading: boolean;
     error: string | null;
     fetchTasks: () => Promise<void>;
     addTask: (task: Omit<Task, 'id' | 'googleDriveFileId'>) => Promise<void>;
     updateTask: (task: Task) => Promise<void>;
+    updateTaskStatus: (id: string, status: Task['status']) => Promise<void>;
     deleteTask: (id: string, fileId: string) => Promise<void>;
+    setViewMode: (mode: 'grid' | 'kanban') => void;
+    setSelectedCategory: (category: string | null) => void;
 }
 
 export const useTasksStore = create<TasksState>()(
@@ -19,6 +24,8 @@ export const useTasksStore = create<TasksState>()(
         (set) => ({
             tasks: [],
             folderIds: null,
+            viewMode: 'grid',
+            selectedCategory: null,
             isLoading: false,
             error: null,
 
@@ -61,14 +68,26 @@ export const useTasksStore = create<TasksState>()(
                 try {
                     await googleDriveService.updateTask(updatedTask);
                     set((state) => ({
-                        tasks: state.tasks.map((t) =>
-                            t.id === updatedTask.id ? updatedTask : t
-                        ),
+                        tasks: state.tasks.map((t) => (t.id === updatedTask.id ? updatedTask : t)),
                         isLoading: false
                     }));
                 } catch (error) {
                     console.error('Failed to update task:', error);
                     set({ error: 'Failed to update task', isLoading: false });
+                }
+            },
+
+            updateTaskStatus: async (id, status) => {
+                set((state) => ({
+                    tasks: state.tasks.map((t) => t.id === id ? { ...t, status } : t)
+                }));
+                try {
+                    const task = useTasksStore.getState().tasks.find(t => t.id === id);
+                    if (task) {
+                        await googleDriveService.updateTask(task);
+                    }
+                } catch (error) {
+                    console.error('Failed to update task status:', error);
                 }
             },
 
@@ -85,12 +104,16 @@ export const useTasksStore = create<TasksState>()(
                     set({ error: 'Failed to delete task', isLoading: false });
                 }
             },
+
+            setViewMode: (viewMode) => set({ viewMode }),
+            setSelectedCategory: (selectedCategory) => set({ selectedCategory }),
         }),
         {
             name: 'tasks-storage',
             partialize: (state) => ({
                 tasks: state.tasks,
-                folderIds: state.folderIds
+                folderIds: state.folderIds,
+                viewMode: state.viewMode,
             }),
         }
     )

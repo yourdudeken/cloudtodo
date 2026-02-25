@@ -1,20 +1,49 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useTasksStore } from '@/store/tasksStore';
-import { LogOut, Plus, Search, User, Loader2, ArrowRight } from 'lucide-react';
+import { LogOut, Plus, Search, User, Loader2, ArrowRight, LayoutGrid, Columns, Tag, Menu, X } from 'lucide-react';
 import { CreateTaskModal } from '@/components/CreateTaskModal';
 import { TaskDetailsModal } from '@/components/TaskDetailsModal';
+import { KanbanBoard } from '@/components/KanbanBoard';
 import type { Task } from '@/types';
 
 export default function Dashboard() {
     const { user, logout } = useAuthStore();
-    const { tasks, fetchTasks, isLoading } = useTasksStore();
+    const { tasks, fetchTasks, isLoading, viewMode, setViewMode, selectedCategory, setSelectedCategory } = useTasksStore();
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+    const [activeTab, setActiveTab] = useState('All Tasks');
 
     useEffect(() => {
         fetchTasks();
     }, [fetchTasks]);
+
+    const categories = useMemo(() => {
+        const cats = new Set<string>();
+        tasks.forEach(t => t.categories.forEach(c => cats.add(c)));
+        return Array.from(cats);
+    }, [tasks]);
+
+    const filteredTasks = useMemo(() => {
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+
+        return tasks.filter(t => {
+            // Tab Filtering
+            if (activeTab === 'Today' && t.dueDate !== todayStr) return false;
+            if (activeTab === 'Upcoming' && (!t.dueDate || t.dueDate <= todayStr)) return false;
+            if (activeTab === 'Completed' && t.status !== 'completed') return false;
+
+            // Category & Search Filtering
+            const matchesCategory = selectedCategory ? t.categories.includes(selectedCategory) : true;
+            const matchesSearch = t.taskTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                t.description.toLowerCase().includes(searchQuery.toLowerCase());
+
+            return matchesCategory && matchesSearch;
+        });
+    }, [tasks, selectedCategory, searchQuery, activeTab]);
 
     return (
         <div className="flex h-screen bg-black text-white overflow-hidden font-sans relative">
@@ -24,17 +53,31 @@ export default function Dashboard() {
                 <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-600/10 rounded-full mix-blend-screen filter blur-[120px] animate-pulse delay-700"></div>
             </div>
 
+            {/* Mobile Sidebar Overlay */}
+            {isSidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
             {/* Sidebar */}
-            <aside className="w-72 bg-white/[0.02] backdrop-blur-3xl border-r border-white/5 flex flex-col hidden md:flex relative z-10">
-                <div className="p-8">
-                    <div className="flex items-center gap-3 group cursor-pointer">
-                        <div className="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg transform group-hover:rotate-12 transition-transform duration-300">
-                            <Plus className="w-6 h-6 text-white" />
+            <aside className={`fixed md:static inset-y-0 left-0 w-72 bg-black md:bg-white/[0.02] backdrop-blur-3xl border-r border-white/5 flex flex-col z-50 transition-transform duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+                <div className="p-8 flex items-center justify-between">
+                    <div className="flex items-center gap-3 group cursor-pointer" onClick={() => setActiveTab('All Tasks')}>
+                        <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg transform group-hover:rotate-12 transition-transform duration-300">
+                            <img src="/cloudtodo.png" alt="CloudTodo" className="w-full h-full object-cover" />
                         </div>
-                        <span className="text-2xl font-bold tracking-tighter bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                        <span className="text-2xl font-bold tracking-tighter bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent uppercase">
                             CloudTodo
                         </span>
                     </div>
+                    <button
+                        className="md:hidden p-2 text-gray-400 hover:text-white"
+                        onClick={() => setIsSidebarOpen(false)}
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
                 </div>
 
                 <nav className="flex-1 px-6 space-y-6">
@@ -45,16 +88,19 @@ export default function Dashboard() {
                             Views
                         </p>
                         {['All Tasks', 'Today', 'Upcoming', 'Completed'].map((item) => (
-                            <a
+                            <button
                                 key={item}
-                                href="#"
-                                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${item === 'All Tasks'
+                                onClick={() => {
+                                    setActiveTab(item);
+                                    setIsSidebarOpen(false);
+                                }}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === item
                                     ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20'
-                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                    : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
                                     }`}
                             >
                                 <span className="font-medium">{item}</span>
-                            </a>
+                            </button>
                         ))}
                     </div>
                 </nav>
@@ -82,29 +128,73 @@ export default function Dashboard() {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 flex flex-col min-w-0 bg-transparent relative z-10">
+            <main className="flex-1 flex flex-col min-w-0 bg-transparent relative z-10 w-full overflow-hidden">
                 {/* Header */}
-                <header className="h-20 border-b border-white/5 flex items-center justify-between px-10 bg-black/20 backdrop-blur-md">
+                <header className="h-20 border-b border-white/5 flex items-center justify-between px-4 md:px-10 bg-black/20 backdrop-blur-md">
                     <div className="flex items-center gap-4 flex-1">
+                        <button
+                            className="md:hidden p-2 text-gray-400 hover:text-white"
+                            onClick={() => setIsSidebarOpen(true)}
+                        >
+                            <Menu className="w-6 h-6" />
+                        </button>
                         <div className="relative w-full max-w-sm group">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-indigo-400 transition-colors" />
                             <input
                                 type="text"
                                 placeholder="Search tasks..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full bg-white/[0.03] border border-white/5 rounded-2xl pl-12 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/40 transition-all placeholder:text-gray-600 text-gray-200"
                             />
                         </div>
                     </div>
+
+                    <div className="flex items-center gap-2 bg-white/[0.03] p-1 rounded-2xl border border-white/5 ml-2">
+                        <button
+                            onClick={() => setViewMode('grid')}
+                            className={`p-2 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-gray-500 hover:text-white'}`}
+                        >
+                            <LayoutGrid className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => setViewMode('kanban')}
+                            className={`p-2 rounded-xl transition-all ${viewMode === 'kanban' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-gray-500 hover:text-white'}`}
+                        >
+                            <Columns className="w-5 h-5" />
+                        </button>
+                    </div>
                 </header>
 
                 {/* Content */}
-                <div className="flex-1 overflow-auto p-10 pt-12">
+                <div className="flex-1 overflow-auto p-6 md:p-10 pt-12 custom-scrollbar">
                     <div className="max-w-7xl mx-auto">
-                        <div className="mb-12">
-                            <h2 className="text-4xl font-black text-white mb-3 tracking-tight">
-                                Welcome back, {user?.name?.split(' ')[0]}
-                            </h2>
-                            <p className="text-gray-400 text-lg font-medium">Here's your productivity overview.</p>
+                        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-8">
+                            <div>
+                                <h2 className="text-3xl md:text-4xl font-black text-white mb-3 tracking-tight">
+                                    {activeTab}
+                                </h2>
+                                <p className="text-gray-400 text-lg font-medium">Hello, {user?.name?.split(' ')[0]}. Here's your recap.</p>
+                            </div>
+
+                            {/* Category Filter */}
+                            <div className="flex flex-wrap gap-2 max-w-md md:justify-end">
+                                <button
+                                    onClick={() => setSelectedCategory(null)}
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all ${!selectedCategory ? 'bg-white text-black border-white' : 'border-white/10 text-gray-500 hover:border-white/20'}`}
+                                >
+                                    All
+                                </button>
+                                {categories.map(cat => (
+                                    <button
+                                        key={cat}
+                                        onClick={() => setSelectedCategory(cat)}
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all ${selectedCategory === cat ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-white/10 text-gray-500 hover:border-white/20'}`}
+                                    >
+                                        {cat}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         {isLoading ? (
@@ -119,13 +209,12 @@ export default function Dashboard() {
                                 </div>
                                 <h3 className="text-2xl font-bold text-white mb-2">Clean slate</h3>
                                 <p className="text-gray-500 max-w-sm mb-8">Ready to start organizing your tasks? Create your first one above.</p>
-                                <div className="invisible">
-                                    {/* Placeholder */}
-                                </div>
                             </div>
+                        ) : viewMode === 'kanban' ? (
+                            <KanbanBoard onTaskClick={setSelectedTask} />
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-12">
-                                {tasks.map((task) => (
+                                {filteredTasks.map((task) => (
                                     <div
                                         key={task.id}
                                         onClick={() => setSelectedTask(task)}
@@ -142,9 +231,18 @@ export default function Dashboard() {
                                         </div>
                                         <h3 className="font-bold text-xl mb-3 group-hover:text-indigo-400 transition-colors leading-tight">{task.taskTitle}</h3>
                                         <p className="text-gray-500 text-sm line-clamp-2 leading-relaxed mb-6">{task.description}</p>
+
+                                        <div className="flex flex-wrap gap-2 mb-6">
+                                            {task.categories.map(cat => (
+                                                <span key={cat} className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/5 text-[10px] font-bold text-indigo-400 border border-indigo-500/10">
+                                                    <Tag className="w-2.5 h-2.5" />
+                                                    {cat}
+                                                </span>
+                                            ))}
+                                        </div>
+
                                         <div className="flex items-center justify-between mt-auto pt-6 border-t border-white/5">
                                             <div className="flex -space-x-2">
-                                                {/* Placeholder for attachments/users */}
                                                 <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-bold text-gray-500">
                                                     {task.status.charAt(0).toUpperCase()}
                                                 </div>

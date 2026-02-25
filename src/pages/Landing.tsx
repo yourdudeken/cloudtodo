@@ -28,10 +28,10 @@ export default function Landing() {
             <nav className="relative z-50 border-b border-white/5 bg-black/50 backdrop-blur-xl sticky top-0">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
                     <div className="flex items-center gap-2 group cursor-pointer">
-                        <div className="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg transform group-hover:rotate-12 transition-transform duration-300">
-                            <Cloud className="w-6 h-6 text-white" />
+                        <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg transform group-hover:rotate-12 transition-transform duration-300">
+                            <img src="/cloudtodo.png" alt="CloudTodo" className="w-full h-full object-cover" />
                         </div>
-                        <span className="text-2xl font-bold tracking-tighter bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                        <span className="text-2xl font-bold tracking-tighter bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent uppercase">
                             CloudTodo
                         </span>
                     </div>

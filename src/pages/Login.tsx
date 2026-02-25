@@ -1,7 +1,7 @@
 import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 import { useAuthStore } from '@/store/authStore';
 import { Navigate, Link } from 'react-router-dom';
-import { Loader2, Cloud, Shield, Lock, ArrowRight } from 'lucide-react';
+import { Loader2, Shield, Lock, ArrowRight } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Login() {
@@ -24,10 +24,10 @@ export default function Login() {
             <div className="relative z-10 w-full max-w-md px-6">
                 {/* Logo Section */}
                 <Link to="/" className="flex items-center justify-center gap-2 mb-12 group">
-                    <div className="w-12 h-12 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg transform group-hover:rotate-12 transition-transform duration-300">
-                        <Cloud className="w-7 h-7 text-white" />
+                    <div className="w-12 h-12 rounded-xl overflow-hidden shadow-lg transform group-hover:rotate-12 transition-transform duration-300">
+                        <img src="/cloudtodo.png" alt="CloudTodo" className="w-full h-full object-cover" />
                     </div>
-                    <span className="text-3xl font-bold tracking-tighter bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                    <span className="text-3xl font-bold tracking-tighter bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent uppercase">
                         CloudTodo
                     </span>
                 </Link>

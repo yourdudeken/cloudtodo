@@ -137,6 +137,16 @@ export function CreateTaskModal() {
                             <option value={3}>Optional (Low)</option>
                         </select>
                     </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="categories" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Categories</Label>
+                        <Input
+                            id="categories"
+                            value={formData.categories}
+                            onChange={(e) => setFormData({ ...formData, categories: e.target.value })}
+                            placeholder="e.g. Work, Urgent, Personal"
+                            className="bg-white/[0.03] border-white/5 rounded-xl h-12 focus:ring-indigo-500/20 focus:border-indigo-500/40"
+                        />
+                    </div>
                     <DialogFooter className="mt-4">
                         <Button type="submit" disabled={isLoading} className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 font-bold transition-all">
                             {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Plus className="mr-2 h-5 w-5" />}
