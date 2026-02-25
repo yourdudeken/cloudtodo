@@ -54,9 +54,7 @@ export const googleDriveService = {
     async findFolder(name: string, parentId: string = 'root', token?: string) {
         // For the root folder, we can be slightly more flexible with the parent constraint
         // to ensure we find it even if 'root' alias behaves unexpectedly in some API states.
-        const parentQuery = parentId === 'root'
-            ? `sharedWithMe = false` // Look in user's own drive
-            : `'${parentId}' in parents`;
+        const parentQuery = `'${parentId}' in parents`;
 
         const query = `mimeType='application/vnd.google-apps.folder' and name='${name}' and ${parentQuery} and trashed=false`;
 
