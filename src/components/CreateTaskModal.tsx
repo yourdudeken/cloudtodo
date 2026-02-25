@@ -104,6 +104,9 @@ export function CreateTaskModal() {
                 dueTime: '',
                 priority: 2,
                 categories: '',
+                isStarred: false,
+                isPinned: false,
+                isPersonal: true
             });
             setFiles([]);
         } catch (error) {
