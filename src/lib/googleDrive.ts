@@ -174,10 +174,19 @@ export const googleDriveService = {
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
         form.append('file', file);
 
-        const response = await axios.post(`${UPLOAD_API_URL}/files?uploadType=multipart&fields=id,webViewLink,webContentLink`, form, {
+        const response = await axios.post(`${UPLOAD_API_URL}/files?uploadType=multipart&fields=id,name,mimeType,webViewLink,webContentLink`, form, {
             headers: getHeaders('multipart/related')
         });
 
+        return response.data;
+    },
+
+    async getFileBlob(fileId: string): Promise<Blob> {
+        const response = await axios.get(`${DRIVE_API_URL}/files/${fileId}`, {
+            params: { alt: 'media' },
+            headers: getHeaders(),
+            responseType: 'blob'
+        });
         return response.data;
     }
 };

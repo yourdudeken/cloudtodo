@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useTasksStore } from '@/store/tasksStore';
-import { LogOut, Plus, Search, User, Loader2, ArrowRight, LayoutGrid, Columns, Tag, Menu, X } from 'lucide-react';
+import { LogOut, Plus, Search, User, Loader2, ArrowRight, LayoutGrid, Columns, Tag, Menu, X, Pin, Star } from 'lucide-react';
 import { CreateTaskModal } from '@/components/CreateTaskModal';
 import { TaskDetailsModal } from '@/components/TaskDetailsModal';
 import { KanbanBoard } from '@/components/KanbanBoard';
@@ -219,12 +219,16 @@ export default function Dashboard() {
                                         className="p-8 bg-white/[0.02] border border-white/5 rounded-[2rem] hover:border-indigo-500/30 transition-all hover:shadow-2xl hover:shadow-indigo-500/5 group cursor-pointer backdrop-blur-sm"
                                     >
                                         <div className="flex justify-between items-start mb-6">
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${task.priority === 1 ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                task.priority === 2 ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
-                                                    'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                                }`}>
-                                                {task.priority === 1 ? 'High' : task.priority === 2 ? 'Med' : 'Low'}
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${task.priority === 1 ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                    task.priority === 2 ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
+                                                        'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                                    }`}>
+                                                    {task.priority === 1 ? 'High' : task.priority === 2 ? 'Med' : 'Low'}
+                                                </span>
+                                                {task.isPinned && <Pin className="w-3.5 h-3.5 text-blue-400 fill-blue-400/20" />}
+                                                {task.isStarred && <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500/20" />}
+                                            </div>
                                             <span className="text-[11px] font-medium text-gray-500">{task.dueDate || 'No date'}</span>
                                         </div>
                                         <h3 className="font-bold text-xl mb-3 group-hover:text-indigo-400 transition-colors leading-tight">{task.taskTitle}</h3>

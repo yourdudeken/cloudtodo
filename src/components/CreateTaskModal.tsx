@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Loader2, Paperclip, X, Image, Music, Video, File as FileIcon } from 'lucide-react';
+import { Plus, Loader2, Paperclip, X, Image, Music, Video, File as FileIcon, Star, Pin, User, Users } from 'lucide-react';
 import type { PriorityLevel, Attachments } from '@/types';
 import { googleDriveService, SUBFOLDERS } from '@/lib/googleDrive';
 
@@ -27,6 +27,9 @@ export function CreateTaskModal() {
         dueTime: '',
         priority: 2 as PriorityLevel,
         categories: '',
+        isStarred: false,
+        isPinned: false,
+        isPersonal: true
     });
 
     const [files, setFiles] = useState<File[]>([]);
@@ -62,11 +65,12 @@ export function CreateTaskModal() {
                 else if (file.type.startsWith('audio/')) category = 'AUDIOS';
 
                 const uploaded = await googleDriveService.uploadAttachment(file, category);
+                const item = { id: uploaded.id, name: uploaded.name, mimeType: uploaded.mimeType };
 
-                if (category === 'PICTURES') attachments.images.push(uploaded.id);
-                else if (category === 'VIDEOS') attachments.videos.push(uploaded.id);
-                else if (category === 'AUDIOS') attachments.audio.push(uploaded.id);
-                else attachments.documents.push(uploaded.id);
+                if (category === 'PICTURES') attachments.images.push(item);
+                else if (category === 'VIDEOS') attachments.videos.push(item);
+                else if (category === 'AUDIOS') attachments.audio.push(item);
+                else attachments.documents.push(item);
             }
 
             await addTask({
@@ -76,10 +80,13 @@ export function CreateTaskModal() {
                 dueTime: formData.dueTime,
                 reminder: 30,
                 priority: formData.priority,
-                taskType: { isPersonal: true, isCollaborative: false },
-                isStarred: false,
-                isPinned: false,
-                categories: formData.categories.split(',').map(c => c.trim()).filter(Boolean),
+                taskType: {
+                    isPersonal: formData.isPersonal,
+                    isCollaborative: !formData.isPersonal
+                },
+                isStarred: formData.isStarred,
+                isPinned: formData.isPinned,
+                categories: formData.categories.split(',').map(c => c.trim()).filter(c => c),
                 tags: [],
                 recurrence: 'None',
                 status: 'todo',
@@ -166,6 +173,41 @@ export function CreateTaskModal() {
                                 onChange={(e) => setFormData({ ...formData, dueTime: e.target.value })}
                                 className="bg-white/[0.03] border-white/5 rounded-xl focus:ring-indigo-500/20 h-10"
                             />
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 py-2">
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, isPinned: !formData.isPinned })}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${formData.isPinned ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/5 text-gray-500'}`}
+                        >
+                            <Pin className={`w-3.5 h-3.5 ${formData.isPinned ? 'fill-current' : ''}`} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Pin</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, isStarred: !formData.isStarred })}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${formData.isStarred ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400' : 'bg-white/5 border-white/5 text-gray-500'}`}
+                        >
+                            <Star className={`w-3.5 h-3.5 ${formData.isStarred ? 'fill-current' : ''}`} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Star</span>
+                        </button>
+                        <div className="flex items-center gap-1 bg-white/5 border border-white/5 p-1 rounded-xl ml-auto">
+                            <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, isPersonal: true })}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${formData.isPersonal ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
+                            >
+                                <User className="w-3 h-3" /> Personal
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, isPersonal: false })}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${!formData.isPersonal ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
+                            >
+                                <Users className="w-3 h-3" /> Collab
+                            </button>
                         </div>
                     </div>
                     <div className="grid gap-2">

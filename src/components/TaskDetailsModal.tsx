@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Task, PriorityLevel, Attachments } from '@/types';
+import type { Task, PriorityLevel, Attachments, AttachmentItem } from '@/types';
 import { useTasksStore } from '@/store/tasksStore';
 import { googleDriveService, SUBFOLDERS } from '@/lib/googleDrive';
 import {
@@ -12,7 +12,49 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Loader2, Upload, File as FileIcon, Plus, ArrowRight, Music, Video, Edit2, Check, X, Trash2, Paperclip } from 'lucide-react';
+import { Loader2, Upload, File as FileIcon, Plus, ArrowRight, Music, Video, Edit2, Check, X, Trash2, Paperclip, ImageIcon, Star, Pin } from 'lucide-react';
+
+function DriveImage({ fileId, alt }: { fileId: string; alt: string }) {
+    const [url, setUrl] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchImage = async () => {
+            try {
+                const blob = await googleDriveService.getFileBlob(fileId);
+                const objectUrl = URL.createObjectURL(blob);
+                if (isMounted) {
+                    setUrl(objectUrl);
+                    setLoading(false);
+                }
+            } catch (error) {
+                console.error('Failed to fetch image:', error);
+                if (isMounted) setLoading(false);
+            }
+        };
+
+        fetchImage();
+        return () => {
+            isMounted = false;
+            if (url) URL.revokeObjectURL(url);
+        };
+    }, [fileId]);
+
+    if (loading) return (
+        <div className="w-full h-full flex items-center justify-center bg-white/5 animate-pulse rounded-[1.5rem]">
+            <ImageIcon className="w-6 h-6 text-gray-700" />
+        </div>
+    );
+
+    if (!url) return (
+        <div className="w-full h-full flex items-center justify-center bg-red-500/5 rounded-[1.5rem] border border-red-500/10">
+            <X className="w-6 h-6 text-red-900" />
+        </div>
+    );
+
+    return <img src={url} alt={alt} className="w-full h-full object-cover" />;
+}
 
 interface TaskDetailsModalProps {
     task: Task | null;
@@ -28,14 +70,22 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
     // Form state for editing
     const [editForm, setEditForm] = useState<Partial<Task>>({});
     const [newFiles, setNewFiles] = useState<File[]>([]);
+    const [removedAttachmentIds, setRemovedAttachmentIds] = useState<string[]>([]);
 
     useEffect(() => {
         if (task) {
             setEditForm(task);
             setNewFiles([]);
+            setRemovedAttachmentIds([]);
             setIsEditing(false);
         }
     }, [task]);
+
+    const getAttachmentId = (item: string | AttachmentItem) => typeof item === 'string' ? item : item.id;
+    const getAttachmentName = (item: string | AttachmentItem, fallback: string = 'Resource') => {
+        if (typeof item === 'string') return `${fallback} ${item.slice(0, 8)}`;
+        return item.name || `${fallback} ${item.id.slice(0, 8)}`;
+    };
 
     if (!task) return null;
 
@@ -52,8 +102,32 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
     const removeExistingAttachment = (type: keyof Attachments, id: string) => {
         if (!editForm.attachments) return;
         const updated = { ...editForm.attachments };
-        updated[type] = updated[type].filter(item => item !== id);
+        updated[type] = (updated[type] as any[]).filter(item => {
+            const itemId = typeof item === 'string' ? item : item.id;
+            return itemId !== id;
+        });
         setEditForm({ ...editForm, attachments: updated });
+        setRemovedAttachmentIds(prev => [...prev, id]);
+    };
+
+    const togglePin = async () => {
+        if (!task) return;
+        const updated = { ...task, isPinned: !task.isPinned, updatedDate: new Date().toISOString() };
+        await updateTask(updated);
+    };
+
+    const toggleStar = async () => {
+        if (!task) return;
+        const updated = { ...task, isStarred: !task.isStarred, updatedDate: new Date().toISOString() };
+        await updateTask(updated);
+    };
+
+    const handleDelete = async () => {
+        if (!task || !task.googleDriveFileId) return;
+        if (window.confirm('Are you sure you want to permanently destroy this task and all its cloud assets?')) {
+            await useTasksStore.getState().deleteTask(task.id, task.googleDriveFileId);
+            onClose();
+        }
     };
 
     const handleSave = async () => {
@@ -71,14 +145,24 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                 else if (file.type.startsWith('audio/')) category = 'AUDIOS';
 
                 const uploaded = await googleDriveService.uploadAttachment(file, category);
+                const item: AttachmentItem = { id: uploaded.id, name: uploaded.name, mimeType: uploaded.mimeType };
 
-                if (category === 'PICTURES') finalAttachments.images.push(uploaded.id);
-                else if (category === 'VIDEOS') finalAttachments.videos.push(uploaded.id);
-                else if (category === 'AUDIOS') finalAttachments.audio.push(uploaded.id);
-                else finalAttachments.documents.push(uploaded.id);
+                if (category === 'PICTURES') finalAttachments.images.push(item);
+                else if (category === 'VIDEOS') finalAttachments.videos.push(item);
+                else if (category === 'AUDIOS') finalAttachments.audio.push(item);
+                else finalAttachments.documents.push(item);
             }
 
-            // 2. Update task
+            // 2. Cleanup removed attachments from Drive
+            for (const id of removedAttachmentIds) {
+                try {
+                    await googleDriveService.deleteTask(id);
+                } catch (e) {
+                    console.error(`Failed to cleanup Drive file ${id}`, e);
+                }
+            }
+
+            // 3. Update task
             await updateTask({
                 ...task,
                 ...editForm,
@@ -88,6 +172,7 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
 
             setIsEditing(false);
             setNewFiles([]);
+            setRemovedAttachmentIds([]);
         } catch (error) {
             console.error('Failed to save task:', error);
         } finally {
@@ -133,12 +218,26 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                     </span>
                                 )}
                             </div>
-                            <button
-                                onClick={() => setIsEditing(!isEditing)}
-                                className={`p-2.5 rounded-full border transition-all ${isEditing ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-600/30' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}
-                            >
-                                {isEditing ? <X className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={togglePin}
+                                    className={`p-2.5 rounded-full border transition-all ${task.isPinned ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-white/10 text-gray-500 hover:text-white'}`}
+                                >
+                                    <Pin className={`w-4 h-4 ${task.isPinned ? 'fill-blue-400' : ''}`} />
+                                </button>
+                                <button
+                                    onClick={toggleStar}
+                                    className={`p-2.5 rounded-full border transition-all ${task.isStarred ? 'bg-yellow-600/20 border-yellow-500/50 text-yellow-400' : 'bg-white/5 border-white/10 text-gray-500 hover:text-white'}`}
+                                >
+                                    <Star className={`w-4 h-4 ${task.isStarred ? 'fill-yellow-400' : ''}`} />
+                                </button>
+                                <button
+                                    onClick={() => setIsEditing(!isEditing)}
+                                    className={`p-2.5 rounded-full border transition-all ${isEditing ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-600/30' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}
+                                >
+                                    {isEditing ? <X className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+                                </button>
+                            </div>
                         </div>
 
                         {isEditing ? (
@@ -165,6 +264,21 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                         <option value="in-progress">In Progress</option>
                                         <option value="completed">Completed</option>
                                     </select>
+                                    <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4">
+                                        <Label className="text-[10px] font-black uppercase tracking-widest text-gray-500 mr-2">Type:</Label>
+                                        <button
+                                            onClick={() => setEditForm({ ...editForm, taskType: { ...editForm.taskType!, isPersonal: true, isCollaborative: false } })}
+                                            className={`text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-md transition-all ${editForm.taskType?.isPersonal ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                                        >
+                                            Personal
+                                        </button>
+                                        <button
+                                            onClick={() => setEditForm({ ...editForm, taskType: { ...editForm.taskType!, isPersonal: false, isCollaborative: true } })}
+                                            className={`text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-md transition-all ${editForm.taskType?.isCollaborative ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                                        >
+                                            Collab
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ) : (
@@ -219,21 +333,25 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                     <Label className="text-[10px] font-black text-gray-500 uppercase tracking-widest opacity-50">Visual Assets</Label>
                                     <div className="grid grid-cols-2 gap-4">
                                         {/* Existing Images */}
-                                        {editForm.attachments?.images.map((id) => (
-                                            <div key={id} className="relative group">
-                                                <a href={getAttachmentUrl(id)} target="_blank" rel="noreferrer" className="block aspect-square rounded-[1.5rem] bg-white/[0.03] border border-white/5 overflow-hidden hover:opacity-80 transition-all">
-                                                    <img src={`https://drive.google.com/thumbnail?id=${id}&sz=w400`} alt="Attachment" className="w-full h-full object-cover" />
-                                                </a>
-                                                {isEditing && (
-                                                    <button
-                                                        onClick={() => removeExistingAttachment('images', id)}
-                                                        className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform z-10"
-                                                    >
-                                                        <X className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        ))}
+                                        {editForm.attachments?.images.map((item) => {
+                                            const id = getAttachmentId(item);
+                                            const name = getAttachmentName(item, 'Image');
+                                            return (
+                                                <div key={id} className="relative group">
+                                                    <a href={getAttachmentUrl(id)} target="_blank" rel="noreferrer" className="block aspect-square rounded-[1.5rem] bg-white/[0.03] border border-white/5 overflow-hidden hover:opacity-80 transition-all">
+                                                        <DriveImage fileId={id} alt={name} />
+                                                    </a>
+                                                    {isEditing && (
+                                                        <button
+                                                            onClick={() => removeExistingAttachment('images', id)}
+                                                            className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform z-10"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
 
                                         {/* New Images */}
                                         {newFiles.filter(f => f.type.startsWith('image/')).map((file, i) => (
@@ -259,27 +377,33 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                         <Label className="text-[10px] font-black text-gray-500 uppercase tracking-widest opacity-50">Documentation & Media</Label>
                                         <div className="flex flex-col gap-3">
                                             {/* Existing Misc */}
-                                            {editForm.attachments && [...editForm.attachments.documents, ...editForm.attachments.audio, ...editForm.attachments.videos].map((id) => (
-                                                <div key={id} className="relative group">
-                                                    <a href={getAttachmentUrl(id)} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/5 hover:border-white/10 transition-all text-sm text-indigo-400 group">
-                                                        <FileIcon className="w-4 h-4 flex-shrink-0" />
-                                                        <span className="font-bold truncate">Resource {id.slice(0, 8)}</span>
-                                                        <ArrowRight className="w-3.5 h-3.5 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                    </a>
-                                                    {isEditing && (
-                                                        <button
-                                                            onClick={() => {
-                                                                const type = editForm.attachments?.documents.includes(id) ? 'documents' :
-                                                                    editForm.attachments?.audio.includes(id) ? 'audio' : 'videos';
-                                                                removeExistingAttachment(type as any, id);
-                                                            }}
-                                                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg z-10"
-                                                        >
-                                                            <X className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            ))}
+                                            {editForm.attachments && [...editForm.attachments.documents, ...editForm.attachments.audio, ...editForm.attachments.videos].map((item) => {
+                                                const id = getAttachmentId(item);
+                                                const name = getAttachmentName(item);
+                                                const isDoc = (editForm.attachments?.documents as any[]).some(i => (typeof i === 'string' ? i : i.id) === id);
+                                                const isAudio = (editForm.attachments?.audio as any[]).some(i => (typeof i === 'string' ? i : i.id) === id);
+
+                                                return (
+                                                    <div key={id} className="relative group">
+                                                        <a href={getAttachmentUrl(id)} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/5 hover:border-white/10 transition-all text-sm text-indigo-400 group">
+                                                            {isAudio ? <Music className="w-4 h-4 flex-shrink-0" /> : isDoc ? <FileIcon className="w-4 h-4 flex-shrink-0" /> : <Video className="w-4 h-4 flex-shrink-0" />}
+                                                            <span className="font-bold truncate">{name}</span>
+                                                            <ArrowRight className="w-3.5 h-3.5 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                        </a>
+                                                        {isEditing && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    const type = isDoc ? 'documents' : isAudio ? 'audio' : 'videos';
+                                                                    removeExistingAttachment(type as any, id);
+                                                                }}
+                                                                className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg z-10"
+                                                            >
+                                                                <X className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
 
                                             {/* New Misc */}
                                             {newFiles.filter(f => !f.type.startsWith('image/')).map((file, i) => (
@@ -319,6 +443,7 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                             setIsEditing(false);
                                             setEditForm(task);
                                             setNewFiles([]);
+                                            setRemovedAttachmentIds([]);
                                         }}
                                         className="rounded-2xl border border-white/5 text-gray-500 hover:text-white hover:bg-white/5 px-8 h-14 font-bold uppercase tracking-widest"
                                     >
@@ -326,13 +451,24 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                     </Button>
                                 </>
                             ) : (
-                                <Button
-                                    variant="ghost"
-                                    onClick={onClose}
-                                    className="rounded-2xl border border-white/5 text-gray-500 hover:text-white hover:bg-white/5 px-10 h-14 font-bold uppercase tracking-widest transition-all"
-                                >
-                                    Exit Overview
-                                </Button>
+                                <>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={onClose}
+                                        className="rounded-2xl border border-white/5 text-gray-500 hover:text-white hover:bg-white/5 px-10 h-14 font-bold uppercase tracking-widest transition-all"
+                                    >
+                                        Exit Overview
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={handleDelete}
+                                        disabled={isSaving}
+                                        className="rounded-2xl border border-red-500/20 text-red-500/50 hover:text-red-500 hover:bg-red-500/5 px-10 h-14 font-bold uppercase tracking-widest transition-all"
+                                    >
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Destroy Task
+                                    </Button>
+                                </>
                             )}
                         </div>
                     </div>

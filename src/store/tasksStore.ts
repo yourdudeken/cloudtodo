@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Task } from '@/types';
+import type { Task, Attachments, AttachmentItem } from '@/types';
 import { googleDriveService } from '@/lib/googleDrive';
 
 interface TasksState {
@@ -94,7 +94,26 @@ export const useTasksStore = create<TasksState>()(
             deleteTask: async (id, fileId) => {
                 set({ isLoading: true, error: null });
                 try {
+                    const task = useTasksStore.getState().tasks.find(t => t.id === id);
+                    if (task) {
+                        // Delete all attachments from Drive
+                        const attachmentTypes: (keyof Attachments)[] = ['audio', 'images', 'documents', 'videos'];
+                        for (const type of attachmentTypes) {
+                            const items = task.attachments[type] as (string | AttachmentItem)[];
+                            for (const item of items) {
+                                const attachmentFileId = typeof item === 'string' ? item : item.id;
+                                try {
+                                    await googleDriveService.deleteTask(attachmentFileId);
+                                } catch (e) {
+                                    console.error(`Failed to delete attachment ${attachmentFileId}`, e);
+                                }
+                            }
+                        }
+                    }
+
+                    // Delete the task file itself
                     await googleDriveService.deleteTask(fileId);
+
                     set((state) => ({
                         tasks: state.tasks.filter((t) => t.id !== id),
                         isLoading: false

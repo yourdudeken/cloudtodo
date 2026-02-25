@@ -5,11 +5,18 @@ export interface TaskType {
     isCollaborative: boolean;
 }
 
+export interface AttachmentItem {
+    id: string;
+    name: string;
+    mimeType?: string;
+    url?: string; // Optional cached local URL
+}
+
 export interface Attachments {
-    audio: string[];
-    images: string[];
-    documents: string[];
-    videos: string[];
+    audio: AttachmentItem[];
+    images: AttachmentItem[];
+    documents: AttachmentItem[];
+    videos: AttachmentItem[];
 }
 
 export interface Comment {
