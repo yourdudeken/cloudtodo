@@ -70,71 +70,77 @@ export function CreateTaskModal() {
                     <span className="font-semibold">New Task</span>
                 </button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px] bg-black/90 backdrop-blur-3xl border-white/10 text-white rounded-[2rem] shadow-2xl">
                 <DialogHeader>
-                    <DialogTitle>Create New Task</DialogTitle>
-                    <DialogDescription>
-                        Add a new task to your list. It will be saved directly to your Google Drive.
+                    <div className="w-12 h-12 bg-indigo-600/20 rounded-2xl flex items-center justify-center mb-4 border border-indigo-500/20">
+                        <Plus className="w-6 h-6 text-indigo-400" />
+                    </div>
+                    <DialogTitle className="text-2xl font-bold tracking-tight">Create New Task</DialogTitle>
+                    <DialogDescription className="text-gray-500 font-medium">
+                        Stored securely in your CloudTodo folder on Google Drive.
                     </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+                <form onSubmit={handleSubmit} className="grid gap-6 py-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="title">Task Title</Label>
+                        <Label htmlFor="title" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Task Title</Label>
                         <Input
                             id="title"
                             value={formData.title}
                             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                            placeholder="e.g. Finish project report"
+                            placeholder="e.g. Design system review"
                             required
+                            className="bg-white/[0.03] border-white/5 rounded-xl h-12 focus:ring-indigo-500/20 focus:border-indigo-500/40"
                         />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="description">Description</Label>
+                        <Label htmlFor="description" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Description</Label>
                         <textarea
                             id="description"
-                            className="flex min-h-[80px] w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-white"
+                            className="flex min-h-[100px] w-full rounded-xl border border-white/5 bg-white/[0.03] px-3 py-3 text-sm ring-offset-background placeholder:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-50 text-white transition-all"
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            placeholder="Add details about your task..."
+                            placeholder="Details about your objective..."
                         />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
-                            <Label htmlFor="dueDate">Due Date</Label>
+                            <Label htmlFor="dueDate" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Due Date</Label>
                             <Input
                                 id="dueDate"
                                 type="date"
                                 value={formData.dueDate}
                                 onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                                className="bg-white/[0.03] border-white/5 rounded-xl focus:ring-indigo-500/20 h-10"
                             />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="dueTime">Due Time</Label>
+                            <Label htmlFor="dueTime" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Time</Label>
                             <Input
                                 id="dueTime"
                                 type="time"
                                 value={formData.dueTime}
                                 onChange={(e) => setFormData({ ...formData, dueTime: e.target.value })}
+                                className="bg-white/[0.03] border-white/5 rounded-xl focus:ring-indigo-500/20 h-10"
                             />
                         </div>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="priority">Priority</Label>
+                        <Label htmlFor="priority" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Priority Level</Label>
                         <select
                             id="priority"
-                            className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-white"
+                            className="flex h-11 w-full rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/40 text-white appearance-none cursor-pointer"
                             value={formData.priority}
                             onChange={(e) => setFormData({ ...formData, priority: Number(e.target.value) as PriorityLevel })}
                         >
-                            <option value={1}>High</option>
-                            <option value={2}>Medium</option>
-                            <option value={3}>Low</option>
+                            <option value={1}>Critical (High)</option>
+                            <option value={2}>Standard (Medium)</option>
+                            <option value={3}>Optional (Low)</option>
                         </select>
                     </div>
-                    <DialogFooter>
-                        <Button type="submit" disabled={isLoading}>
-                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Create Task
+                    <DialogFooter className="mt-4">
+                        <Button type="submit" disabled={isLoading} className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 font-bold transition-all">
+                            {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Plus className="mr-2 h-5 w-5" />}
+                            Initialize Task
                         </Button>
                     </DialogFooter>
                 </form>

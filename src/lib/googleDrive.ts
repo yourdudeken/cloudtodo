@@ -23,22 +23,23 @@ const getHeaders = (contentType: string = 'application/json', token?: string) =>
 };
 
 export const googleDriveService = {
-    async ensureFolderStructure() {
+    async ensureFolderStructure(token?: string) {
         try {
             // 1. Check for root folder
-            let rootFolderId = await this.findFolder(ROOT_FOLDER_NAME);
+            let rootFolderId = await this.findFolder(ROOT_FOLDER_NAME, 'root', token);
 
             if (!rootFolderId) {
-                rootFolderId = await this.createFolder(ROOT_FOLDER_NAME);
+                console.log('Root folder not found, creating...');
+                rootFolderId = await this.createFolder(ROOT_FOLDER_NAME, 'root', token);
             }
 
             // 2. Check for subfolders
             const folderIds: Record<string, string> = { ROOT: rootFolderId };
 
             for (const [key, name] of Object.entries(SUBFOLDERS)) {
-                let folderId = await this.findFolder(name, rootFolderId);
+                let folderId = await this.findFolder(name, rootFolderId, token);
                 if (!folderId) {
-                    folderId = await this.createFolder(name, rootFolderId);
+                    folderId = await this.createFolder(name, rootFolderId, token);
                 }
                 folderIds[key] = folderId;
             }
@@ -50,16 +51,16 @@ export const googleDriveService = {
         }
     },
 
-    async findFolder(name: string, parentId: string = 'root') {
-        const query = `mimeType='application/vnd.google-apps.folder' and name='${name}' and '${parentId}' in parents and trash=false`;
+    async findFolder(name: string, parentId: string = 'root', token?: string) {
+        const query = `mimeType='application/vnd.google-apps.folder' and name='${name}' and '${parentId}' in parents and trashed=false`;
         const response = await axios.get(`${DRIVE_API_URL}/files`, {
             params: { q: query, fields: 'files(id, name)' },
-            headers: getHeaders()
+            headers: getHeaders('application/json', token)
         });
         return response.data.files?.[0]?.id || null;
     },
 
-    async createFolder(name: string, parentId: string = 'root') {
+    async createFolder(name: string, parentId: string = 'root', token?: string) {
         const metadata = {
             name,
             mimeType: 'application/vnd.google-apps.folder',
@@ -67,7 +68,7 @@ export const googleDriveService = {
         };
 
         const response = await axios.post(`${DRIVE_API_URL}/files`, metadata, {
-            headers: getHeaders()
+            headers: getHeaders('application/json', token)
         });
         return response.data.id;
     },
@@ -78,7 +79,7 @@ export const googleDriveService = {
             rootFolderId = folders.ROOT;
         }
 
-        const query = `'${rootFolderId}' in parents and mimeType='application/json' and trash=false`;
+        const query = `'${rootFolderId}' in parents and mimeType='application/json' and trashed=false`;
         const response = await axios.get(`${DRIVE_API_URL}/files`, {
             params: { q: query, fields: 'files(id, name, createdTime, modifiedTime)' },
             headers: getHeaders()

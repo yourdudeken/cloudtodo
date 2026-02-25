@@ -4,7 +4,7 @@ import { googleDriveService } from '@/lib/googleDrive';
 import type { GoogleTokenResponse } from '@/types';
 import axios from 'axios';
 
-const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.install';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.install openid https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 export const useGoogleAuth = () => {
@@ -41,7 +41,7 @@ export const useGoogleAuth = () => {
                             setUser(user);
 
                             // 2. Ensure Folder Structure
-                            await googleDriveService.ensureFolderStructure();
+                            await googleDriveService.ensureFolderStructure(tokenResponse.access_token);
 
                         } catch (error) {
                             console.error('Login failed', error);
