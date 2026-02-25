@@ -12,8 +12,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Loader2 } from 'lucide-react';
-import type { PriorityLevel } from '@/types';
+import { Plus, Loader2, Paperclip, X, Image, Music, Video, File as FileIcon } from 'lucide-react';
+import type { PriorityLevel, Attachments } from '@/types';
+import { googleDriveService, SUBFOLDERS } from '@/lib/googleDrive';
 
 export function CreateTaskModal() {
     const [open, setOpen] = useState(false);
@@ -28,38 +29,81 @@ export function CreateTaskModal() {
         categories: '',
     });
 
+    const [files, setFiles] = useState<File[]>([]);
+    const [isUploading, setIsUploading] = useState(false);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            setFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+        }
+    };
+
+    const removeFile = (index: number) => {
+        setFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const getFileIcon = (type: string) => {
+        if (type.startsWith('image/')) return <Image className="w-4 h-4 text-pink-400" />;
+        if (type.startsWith('video/')) return <Video className="w-4 h-4 text-purple-400" />;
+        if (type.startsWith('audio/')) return <Music className="w-4 h-4 text-indigo-400" />;
+        return <FileIcon className="w-4 h-4 text-blue-400" />;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsUploading(true);
+        const attachments: Attachments = { audio: [], images: [], documents: [], videos: [] };
 
-        await addTask({
-            taskTitle: formData.title,
-            description: formData.description,
-            dueDate: formData.dueDate,
-            dueTime: formData.dueTime,
-            reminder: 30,
-            priority: formData.priority,
-            taskType: { isPersonal: true, isCollaborative: false },
-            isStarred: false,
-            isPinned: false,
-            categories: formData.categories.split(',').map(c => c.trim()).filter(Boolean),
-            tags: [],
-            recurrence: 'None',
-            status: 'todo',
-            attachments: { audio: [], images: [], documents: [], videos: [] },
-            comments: [],
-            createdDate: new Date().toISOString(),
-            updatedDate: new Date().toISOString(),
-        });
+        try {
+            for (const file of files) {
+                let category: keyof typeof SUBFOLDERS = 'DOCUMENTS';
+                if (file.type.startsWith('image/')) category = 'PICTURES';
+                else if (file.type.startsWith('video/')) category = 'VIDEOS';
+                else if (file.type.startsWith('audio/')) category = 'AUDIOS';
 
-        setOpen(false);
-        setFormData({
-            title: '',
-            description: '',
-            dueDate: '',
-            dueTime: '',
-            priority: 2,
-            categories: '',
-        });
+                const uploaded = await googleDriveService.uploadAttachment(file, category);
+
+                if (category === 'PICTURES') attachments.images.push(uploaded.id);
+                else if (category === 'VIDEOS') attachments.videos.push(uploaded.id);
+                else if (category === 'AUDIOS') attachments.audio.push(uploaded.id);
+                else attachments.documents.push(uploaded.id);
+            }
+
+            await addTask({
+                taskTitle: formData.title,
+                description: formData.description,
+                dueDate: formData.dueDate,
+                dueTime: formData.dueTime,
+                reminder: 30,
+                priority: formData.priority,
+                taskType: { isPersonal: true, isCollaborative: false },
+                isStarred: false,
+                isPinned: false,
+                categories: formData.categories.split(',').map(c => c.trim()).filter(Boolean),
+                tags: [],
+                recurrence: 'None',
+                status: 'todo',
+                attachments,
+                comments: [],
+                createdDate: new Date().toISOString(),
+                updatedDate: new Date().toISOString(),
+            });
+
+            setOpen(false);
+            setFormData({
+                title: '',
+                description: '',
+                dueDate: '',
+                dueTime: '',
+                priority: 2,
+                categories: '',
+            });
+            setFiles([]);
+        } catch (error) {
+            console.error('Task creation failed:', error);
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     return (
@@ -80,7 +124,7 @@ export function CreateTaskModal() {
                         Stored securely in your CloudTodo folder on Google Drive.
                     </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="grid gap-6 py-4">
+                <form onSubmit={handleSubmit} className="grid gap-6 py-4 overflow-y-auto max-h-[80vh] px-1">
                     <div className="grid gap-2">
                         <Label htmlFor="title" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Task Title</Label>
                         <Input
@@ -125,17 +169,29 @@ export function CreateTaskModal() {
                         </div>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="priority" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Priority Level</Label>
-                        <select
-                            id="priority"
-                            className="flex h-11 w-full rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/40 text-white appearance-none cursor-pointer"
-                            value={formData.priority}
-                            onChange={(e) => setFormData({ ...formData, priority: Number(e.target.value) as PriorityLevel })}
-                        >
-                            <option value={1}>Critical (High)</option>
-                            <option value={2}>Standard (Medium)</option>
-                            <option value={3}>Optional (Low)</option>
-                        </select>
+                        <Label className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Priority Level</Label>
+                        <div className="grid grid-cols-3 gap-3">
+                            {[
+                                { val: 1, label: 'High', color: 'bg-red-500', border: 'border-red-500/20', text: 'text-red-400' },
+                                { val: 2, label: 'Medium', color: 'bg-orange-500', border: 'border-orange-500/20', text: 'text-orange-400' },
+                                { val: 3, label: 'Low', color: 'bg-indigo-500', border: 'border-indigo-500/20', text: 'text-indigo-400' }
+                            ].map((p) => (
+                                <button
+                                    key={p.val}
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, priority: p.val as PriorityLevel })}
+                                    className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl border transition-all duration-300 ${formData.priority === p.val
+                                        ? `${p.border} ${p.color}/20 ring-1 ring-${p.color.split('-')[1]}-500/50`
+                                        : 'bg-white/[0.02] border-white/5 opacity-40 grayscale hover:opacity-100 hover:grayscale-0'
+                                        }`}
+                                >
+                                    <div className={`w-2 h-2 rounded-full ${p.color}`} />
+                                    <span className={`text-[10px] font-black uppercase tracking-widest ${formData.priority === p.val ? p.text : 'text-gray-500'}`}>
+                                        {p.label}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="categories" className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Categories</Label>
@@ -147,10 +203,49 @@ export function CreateTaskModal() {
                             className="bg-white/[0.03] border-white/5 rounded-xl h-12 focus:ring-indigo-500/20 focus:border-indigo-500/40"
                         />
                     </div>
-                    <DialogFooter className="mt-4">
-                        <Button type="submit" disabled={isLoading} className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 font-bold transition-all">
-                            {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Plus className="mr-2 h-5 w-5" />}
-                            Initialize Task
+
+                    <div className="grid gap-2">
+                        <Label className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1 flex justify-between items-center">
+                            Attachments
+                            <span className="text-[10px] lowercase font-normal opacity-50 italic">Images, Videos, Audio, Docs</span>
+                        </Label>
+                        <div className="mt-1 space-y-3">
+                            <div className="flex flex-wrap gap-2">
+                                {files.map((file, i) => (
+                                    <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs group relative pr-8">
+                                        {getFileIcon(file.type)}
+                                        <span className="max-w-[100px] truncate font-medium">{file.name}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeFile(i)}
+                                            className="absolute right-2 text-gray-500 hover:text-white transition-colors"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                ))}
+                                <label className="flex items-center gap-2 px-4 py-2 rounded-xl border border-dashed border-white/10 hover:border-indigo-500/50 hover:bg-indigo-500/5 cursor-pointer transition-all text-gray-500 hover:text-indigo-400 group">
+                                    <input type="file" multiple className="hidden" onChange={handleFileChange} />
+                                    <Paperclip className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+                                    <span className="text-xs font-bold">Attach Files</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="mt-4 pb-2">
+                        <Button type="submit" disabled={isLoading || isUploading} className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 font-bold transition-all disabled:opacity-50">
+                            {(isLoading || isUploading) ? (
+                                <>
+                                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                    {isUploading ? 'Uploading Media...' : 'Initializing Task...'}
+                                </>
+                            ) : (
+                                <>
+                                    <Plus className="mr-2 h-5 w-5" />
+                                    Create Task
+                                </>
+                            )}
                         </Button>
                     </DialogFooter>
                 </form>
