@@ -1,313 +1,117 @@
-# cloudtodo - Google Drive-Based Todo Application
+# cloudtodo - Google Drive-Based Task Synergy
 
 ## Overview
 
-**cloudtodo** is a modern, privacy-first todo list application that stores all your data directly in **your personal Google Drive**. No external databases, no third-party servers storing your data - everything lives in your Google Drive account, giving you complete ownership and control.
+**cloudtodo** is a premium, privacy-first task management ecosystem that leverages your **personal Google Drive** as a secure, decentralized backend. It eliminates the need for third-party databases, giving you 100% ownership, portability, and control over your data.
+
+By utilizing the native capabilities of the Google Drive API, **cloudtodo** provides a rich, collaborative experience while maintaining the absolute privacy of a local application.
+
+---
 
 ## Key Features
 
-### **100% User-Owned Data**
-- All tasks stored as JSON files in your Google Drive
-- Attachments (images, videos, documents, audio) saved in organized folders
-- No external database - you own and control everything
-- Data persists in your Google Drive even if you stop using the app
+### **User-Owned Ecology**
+- **Decentralized Storage**: All tasks are stored as encrypted-at-rest JSON files within your own Google Drive.
+- **Native Attachments**: High-speed handling of images, videos, documents, and audio recordings, managed in a dedicated folder hierarchy.
+- **Zero-Server Footprint**: Your data never touches an external database. It moves directly between your browser and Google's global infrastructure.
 
-### **Privacy & Security**
-- OAuth 2.0 authentication via Google
-- Direct API calls to Google Drive - no intermediary servers
-- Your data never leaves your Google account
-- Revoke access anytime from your Google Account settings
+### **Native Collaboration (Powered by Drive Permissions)**
+- **True Sharing**: Invite collaborators via email to specific tasks. The app orchestrates native Google Drive permissions (Writer/Owner).
+- **Collaborative Sync Hub**: Manage all active collaborators directly within the task interface. Revoke or grant access with a single click.
+- **Auto-Discovery**: Collaborative tasks shared with you by others are automatically discovered and injected into your dashboard using `appProperties` metadata.
 
-### **Smart Organization**
-- Automatic folder structure in Google Drive (`CLOUDTODO/`)
-- Organized attachment folders (AUDIOS, VIDEOS, DOCUMENTS, PICTURES)
-- Each task is a separate JSON file for easy backup and portability
+### **Premium UI/UX**
+- **Rich Aesthetics**: A stunning dark-mode interface with glassmorphism, smooth transitions, and vibrant accents.
+- **Multi-View System**: Pivot between a high-efficiency **List View**, a visual **Grid View**, and a tactical **Kanban Board**.
+- **Visual Intelligence**: Custom icons for **Solo Missions** vs. **Team Efforts**, plus dedicated indicators for **Pinned** and **Starred** tasks.
 
-### **Rich Features**
-- Multiple views: List, Calendar, Kanban board
-- Task priorities, due dates, and reminders
-- File attachments from your device
-- Collaborative tasks with comments
-- AI-powered task suggestions
-- Real-time browser notifications
-- Offline caching with automatic sync
+### **Integrated Cloud Assets**
+- **Smart Categorization**: Attachments are automatically sorted into `AUDIOS`, `VIDEOS`, `DOCUMENTS`, and `PICTURES`.
+- **Secure Media Pipeline**: Images and media are fetched as binary blobs and rendered securely, bypassing public URL exposure.
+- **Recursive Cleanup**: Deleting a task automatically purges all associated cloud assets, preventing "orphaned" files in your Drive.
 
-## How It Works
+---
 
-### Architecture
+## Architecture
 
+### Folder Structure in your Drive
 ```
 User's Google Drive
-└── CLOUDTODO/                    # Root folder for all tasks
-    ├── task1.json                # Individual task files
-    ├── task2.json
-    ├── task3.json
-    ├── AUDIOS/                   # Audio attachments
-    │   └── recording.mp3
-    ├── VIDEOS/                   # Video attachments
-    │   └── demo.mp4
-    ├── DOCUMENTS/                # Document attachments
-    │   └── notes.pdf
-    └── PICTURES/                 # Image attachments
-        └── screenshot.png
+└── CLOUDTODO/                    # Root Application Hub
+    ├── 6f9a...json               # Task JSON Metadata (ID is Drive FileId)
+    ├── 2d4b...json
+    ├── AUDIOS/                   # Secure Voice & Sound
+    ├── VIDEOS/                   # High-Def Motion Assets
+    ├── DOCUMENTS/                # PDFs, Text, and Code
+    └── PICTURES/                 # Visual Snapshots & Images
 ```
 
-### Data Flow
+### Data Synergy Model
+1. **Auth**: Secure handshake via Google OAuth 2.0.
+2. **Metadata**: Tasks are tagged with `appProperties: { app: 'cloudtodo' }` for instant lookup.
+3. **Permissions**: Collaborative tasks trigger a `Permission.create` request to the Drive API for the collaborator's email.
+4. **Binary Stream**: Attachments are managed via Multipart Uploads for maximum reliability.
 
-1. **Authentication**: User logs in with Google OAuth 2.0
-2. **Initialization**: App creates `CLOUDTODO` folder in user's Drive
-3. **Task Creation**: New tasks saved as JSON files in `CLOUDTODO/`
-4. **Attachments**: Files uploaded to appropriate subfolders
-5. **Sync**: Changes immediately reflected in Google Drive
-6. **Offline**: Local cache for offline access, syncs when online
+---
 
-### Task Data Structure
+## Tech Stack
 
-Each task is stored as a JSON file with this structure:
+- **Frontend**: React 18 + TypeScript + Vite
+- **State**: Zustand (Atomic State Management)
+- **Styling**: TailwindCSS + Vanilla CSS (Custom Design System)
+- **Icons**: Lucide React (High-consistency glyphs)
+- **Networking**: Axios (Direct Google API Integration)
+- **Security**: OAuth 2.0 Scoped Access
 
-```json
-{
-  "taskTitle": "Complete project documentation",
-  "description": "Write comprehensive docs for the new feature",
-  "dueDate": "25-01-2026",
-  "dueTime": "14:30",
-  "reminder": 30,
-  "priority": 1,
-  "taskType": {
-    "isPersonal": false,
-    "isCollaborative": true
-  },
-  "isStarred": true,
-  "isPinned": false,
-  "categories": ["Work", "Documentation"],
-  "tags": ["Important", "Urgent"],
-  "recurrence": "None",
-  "status": "in-progress",
-  "attachments": {
-    "audio": [],
-    "images": ["1a2b3c4d5e6f"],
-    "documents": ["7g8h9i0j1k2l"],
-    "videos": []
-  },
-  "comments": [
-    {
-      "id": "uuid-here",
-      "userId": "user-id",
-      "userEmail": "user@example.com",
-      "content": "Great progress!",
-      "createdAt": "2026-01-19T10:30:00.000Z"
-    }
-  ],
-  "id": "google-drive-file-id",
-  "createdDate": "2026-01-19T09:00:00.000Z",
-  "updatedDate": "2026-01-19T10:30:00.000Z"
-}
-```
+---
 
 ## Getting Started
 
 ### Prerequisites
+- Node.js 18+
+- A Google Cloud Project with the **Google Drive API** enabled.
 
-- Node.js 18+ installed
-- Google Account
-- Google Cloud Project with Drive API enabled
+### 1. Configure Google Cloud
+1.  Enable **Google Drive API** in the [Google Cloud Console](https://console.cloud.google.com/).
+2.  Create OAuth 2.0 Credentials (Web Application).
+3.  Set Authorized Redirect URIs to `http://localhost:5173`.
 
-### 1. Google Cloud Setup
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing one
-3. Enable **Google Drive API**
-4. Create OAuth 2.0 credentials:
-   - Application type: Web application
-   - Authorized JavaScript origins: `http://localhost:5173`
-   - Authorized redirect URIs: `http://localhost:5173`
-5. Copy your Client ID
-
-### 2. Installation
-
+### 2. Local Setup
 ```bash
-# Clone the repository
+# Clone and Install
 git clone https://github.com/yourdudeken/cloudtodo.git
 cd cloudtodo
-
-# Install dependencies
 npm install
+
+# Setup Environment
+echo "VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com" > .env
 ```
 
-### 3. Configuration
-
-Create a `.env` file in the root directory:
-
-```env
-# Google Drive API Credentials
-VITE_GOOGLE_CLIENT_ID=your-client-id-here.apps.googleusercontent.com
-```
-
-### 4. Run the Application
-
+### 3. Launch
 ```bash
-# Start development server
 npm run dev
 ```
 
-Visit `http://localhost:5173` in your browser.
+---
 
-### 5. First Login
+## Privacy & Security Policy
 
-1. Click "Sign in with Google"
-2. Authorize the app to access your Google Drive
-3. App automatically creates `CLOUDTODO` folder
-4. Start creating tasks!
+### Data Sovereignty
+We believe you should own your tools. **cloudtodo** does not have a backend, a tracking pixel, or an analytics engine. Your productivity data is a private conversation between you and your storage provider.
 
-## Usage Guide
-
-### Creating Tasks
-
-1. Click "+ Add Task" button
-2. Fill in task details:
-   - Title (required)
-   - Description
-   - Due date and time
-   - Priority (High/Medium/Low)
-   - Categories and tags
-   - Recurrence pattern
-3. Click "Create Task"
-4. Task is immediately saved to your Google Drive
-
-### Adding Attachments
-
-1. Open a task
-2. Click "Add Attachment"
-3. Select file from your device
-4. File uploads to appropriate folder in Google Drive
-5. Attachment link stored in task JSON
-
-### Viewing in Different Modes
-
-- **List View**: Traditional todo list with filters
-- **Calendar View**: See tasks on a calendar
-- **Kanban Board**: Organize by status columns
-
-### Collaboration
-
-1. Open a task
-2. Click "Collaborate"
-3. Add comments
-4. Comments stored in task JSON file
-
-### Offline Usage
-
-- Tasks cached locally for offline access
-- Changes queued and synced when online
-- Automatic conflict resolution
-
-## Technical Details
-
-### Tech Stack
-
-- **React 18** with TypeScript
-- **Vite** for blazing-fast development
-- **Zustand** for state management
-- **TailwindCSS** for styling
-- **Radix UI** for accessible components
-- **React Router** for navigation
-- **Google Drive API** for storage
-- **OAuth 2.0** for authentication
-
-### Google Drive Integration
-
-- **Direct API calls** using `axios`
-- **OAuth 2.0** for authentication
-- **REST API v3** for file operations
-- **Multipart upload** for attachments
-
-### Key Services
-
-#### `googleDrive.ts`
-- `createTask()` - Creates JSON file in Drive
-- `listTasks()` - Lists all task files
-- `readTask()` - Reads task JSON content
-- `updateTask()` - Updates task file
-- `deleteTask()` - Deletes task file
-- `uploadAttachment()` - Uploads files to Drive
-- `getOrCreateFolder()` - Manages folder structure
-
-#### `authStore.ts`
-- Google OAuth authentication
-- User profile management
-- Token refresh handling
-- Logout and cleanup
-
-#### `tasksStore.ts`
-- Task CRUD operations
-- Local state management
-- Cache synchronization
-- Notification scheduling
-
-## Security & Privacy
-
-### Data Ownership
-- **You own your data** - Everything stored in your Google Drive
-- **No external database** - We don't store anything on our servers
-- **Portable** - Export your data anytime from Google Drive
-
-### Access Control
-- **OAuth 2.0** - Industry-standard authentication
-- **Scoped permissions** - App only accesses Drive files it creates
-- **Revocable** - Revoke access anytime from Google Account settings
-
-### Data Privacy
-- **No tracking** - We don't track your usage
-- **No analytics** - Your data stays private
-- **Open source** - Audit the code yourself
-
-## Deployment
-
-### Vercel (Recommended)
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy
-vercel
-
-# Set environment variables in Vercel dashboard
-```
-
-### Environment Variables for Production
-
-```env
-VITE_GOOGLE_CLIENT_ID=your-production-client-id
-# Update OAuth redirect URIs in Google Cloud Console
-```
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-## License
-
-MIT License - See LICENSE file for details
-
-## Acknowledgments
-
-- Google Drive API for storage
-- React community for amazing tools
-- All contributors and users
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourdudeken/cloudtodo/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourdudeken/cloudtodo/discussions)
+### Scoped Access
+The application requests the `https://www.googleapis.com/auth/drive.file` scope, meaning it **only** has access to the files it creates or those you explicitly open with it. It cannot see your other private documents.
 
 ---
 
-**Made with care by the cloudtodo team**
+## Contributing
+Features are implemented using an agentic coding workflow. If you'd like to contribute:
+1. Fork the repo.
+2. Implement features following the **Separation of Concerns** principle.
+3. Ensure all Folder/Task operations are synced with `googleDriveService.ts`.
+4. Submit a PR.
 
-*Your tasks, your drive, your control.*
+---
+
+**Made for the Decentralized Web**
+*Efficiency without compromise.*
