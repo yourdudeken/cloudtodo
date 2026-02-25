@@ -5,6 +5,7 @@ import { googleDriveService } from '@/lib/googleDrive';
 
 interface TasksState {
     tasks: Task[];
+    folderIds: Record<string, string> | null;
     isLoading: boolean;
     error: string | null;
     fetchTasks: () => Promise<void>;
@@ -17,14 +18,23 @@ export const useTasksStore = create<TasksState>()(
     persist(
         (set) => ({
             tasks: [],
+            folderIds: null,
             isLoading: false,
             error: null,
 
             fetchTasks: async () => {
+                const { folderIds } = useTasksStore.getState();
                 set({ isLoading: true, error: null });
                 try {
-                    const tasks = await googleDriveService.listTasks();
-                    set({ tasks, isLoading: false });
+                    const result = await googleDriveService.listTasks(folderIds?.ROOT);
+                    // If we didn't have folderIds, listTasks will have called ensureFolderStructure
+                    // and return tasks. We should ensure we have the folders now.
+                    if (!folderIds) {
+                        const folders = await googleDriveService.ensureFolderStructure();
+                        set({ tasks: result, folderIds: folders, isLoading: false });
+                    } else {
+                        set({ tasks: result, isLoading: false });
+                    }
                 } catch (error) {
                     console.error('Failed to fetch tasks:', error);
                     set({ error: 'Failed to fetch tasks', isLoading: false });
@@ -32,9 +42,10 @@ export const useTasksStore = create<TasksState>()(
             },
 
             addTask: async (newTask) => {
+                const { folderIds } = useTasksStore.getState();
                 set({ isLoading: true, error: null });
                 try {
-                    const savedTask = await googleDriveService.createTask(newTask);
+                    const savedTask = await googleDriveService.createTask(newTask, folderIds?.ROOT);
                     set((state) => ({
                         tasks: [...state.tasks, savedTask],
                         isLoading: false
@@ -77,7 +88,10 @@ export const useTasksStore = create<TasksState>()(
         }),
         {
             name: 'tasks-storage',
-            partialize: (state) => ({ tasks: state.tasks }), // Only persist tasks
+            partialize: (state) => ({
+                tasks: state.tasks,
+                folderIds: state.folderIds
+            }),
         }
     )
 );

@@ -52,12 +52,30 @@ export const googleDriveService = {
     },
 
     async findFolder(name: string, parentId: string = 'root', token?: string) {
-        const query = `mimeType='application/vnd.google-apps.folder' and name='${name}' and '${parentId}' in parents and trashed=false`;
+        // For the root folder, we can be slightly more flexible with the parent constraint
+        // to ensure we find it even if 'root' alias behaves unexpectedly in some API states.
+        const parentQuery = parentId === 'root'
+            ? `sharedWithMe = false` // Look in user's own drive
+            : `'${parentId}' in parents`;
+
+        const query = `mimeType='application/vnd.google-apps.folder' and name='${name}' and ${parentQuery} and trashed=false`;
+
         const response = await axios.get(`${DRIVE_API_URL}/files`, {
-            params: { q: query, fields: 'files(id, name)' },
+            params: {
+                q: query,
+                fields: 'files(id, name, parents)',
+                spaces: 'drive'
+            },
             headers: getHeaders('application/json', token)
         });
-        return response.data.files?.[0]?.id || null;
+
+        // If we found multiple, filter strictly by the requested parentId if it's not 'root'
+        const files = response.data.files || [];
+        if (parentId !== 'root') {
+            return files.find((f: any) => f.parents?.includes(parentId))?.id || null;
+        }
+
+        return files[0]?.id || null;
     },
 
     async createFolder(name: string, parentId: string = 'root', token?: string) {
