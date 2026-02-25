@@ -2,18 +2,20 @@ import { useTasksStore } from '@/store/tasksStore';
 import type { Task } from '@/types';
 import { MoreHorizontal, Plus, ArrowRight, Clock, CheckCircle2, Circle } from 'lucide-react';
 
-export function KanbanBoard({ onTaskClick }: { onTaskClick: (task: Task) => void }) {
-    const { tasks, updateTaskStatus, selectedCategory } = useTasksStore();
+export function KanbanBoard({
+    tasks,
+    onTaskClick
+}: {
+    tasks: Task[],
+    onTaskClick: (task: Task) => void
+}) {
+    const { updateTaskStatus } = useTasksStore();
 
     const statuses = [
         { id: 'todo', label: 'To Do', icon: Circle, color: 'text-gray-400' },
         { id: 'in-progress', label: 'In Progress', icon: Clock, color: 'text-indigo-400' },
         { id: 'completed', label: 'Completed', icon: CheckCircle2, color: 'text-green-400' },
     ];
-
-    const filteredTasks = selectedCategory
-        ? tasks.filter(t => t.categories.includes(selectedCategory))
-        : tasks;
 
     const onDragOver = (e: React.DragEvent) => {
         e.preventDefault();
@@ -40,7 +42,7 @@ export function KanbanBoard({ onTaskClick }: { onTaskClick: (task: Task) => void
                             <column.icon className={`w-5 h-5 ${column.color}`} />
                             <h3 className="font-bold text-lg tracking-tight text-white">{column.label}</h3>
                             <span className="px-2.5 py-0.5 rounded-full bg-white/5 text-[10px] font-black text-gray-500 border border-white/5">
-                                {filteredTasks.filter(t => t.status === column.id).length}
+                                {tasks.filter(t => t.status === column.id).length}
                             </span>
                         </div>
                         <button className="p-2 hover:bg-white/5 rounded-xl transition-colors text-gray-500">
@@ -49,7 +51,7 @@ export function KanbanBoard({ onTaskClick }: { onTaskClick: (task: Task) => void
                     </div>
 
                     <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
-                        {filteredTasks
+                        {tasks
                             .filter((t) => t.status === column.id)
                             .map((task) => (
                                 <div

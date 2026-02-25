@@ -5,6 +5,7 @@ import { LogOut, Plus, Search, User, Loader2, ArrowRight, LayoutGrid, Columns, T
 import { CreateTaskModal } from '@/components/CreateTaskModal';
 import { TaskDetailsModal } from '@/components/TaskDetailsModal';
 import { KanbanBoard } from '@/components/KanbanBoard';
+import { Footer } from '@/components/Footer';
 import type { Task } from '@/types';
 
 export default function Dashboard() {
@@ -12,7 +13,7 @@ export default function Dashboard() {
     const { tasks, fetchTasks, isLoading, viewMode, setViewMode, selectedCategory, setSelectedCategory } = useTasksStore();
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     const [activeTab, setActiveTab] = useState('All Tasks');
 
@@ -62,7 +63,7 @@ export default function Dashboard() {
             )}
 
             {/* Sidebar */}
-            <aside className={`fixed md:static inset-y-0 left-0 w-72 bg-black md:bg-white/[0.02] backdrop-blur-3xl border-r border-white/5 flex flex-col z-50 transition-transform duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+            <aside className={`fixed md:relative inset-y-0 left-0 bg-black md:bg-white/[0.02] backdrop-blur-3xl border-r border-white/5 flex flex-col z-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full md:translate-x-0 w-0 border-r-0 overflow-hidden'}`}>
                 <div className="p-8 flex items-center justify-between">
                     <div className="flex items-center gap-3 group cursor-pointer" onClick={() => setActiveTab('All Tasks')}>
                         <span className="text-2xl font-bold tracking-tighter bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent uppercase">
@@ -70,7 +71,7 @@ export default function Dashboard() {
                         </span>
                     </div>
                     <button
-                        className="md:hidden p-2 text-gray-400 hover:text-white"
+                        className="p-2 text-gray-400 hover:text-white transition-colors"
                         onClick={() => setIsSidebarOpen(false)}
                     >
                         <X className="w-6 h-6" />
@@ -130,7 +131,7 @@ export default function Dashboard() {
                 <header className="h-20 border-b border-white/5 flex items-center justify-between px-4 md:px-10 bg-black/20 backdrop-blur-md">
                     <div className="flex items-center gap-4 flex-1">
                         <button
-                            className="md:hidden p-2 text-gray-400 hover:text-white"
+                            className={`p-2 text-gray-400 hover:text-white transition-colors ${isSidebarOpen ? 'md:hidden' : ''}`}
                             onClick={() => setIsSidebarOpen(true)}
                         >
                             <Menu className="w-6 h-6" />
@@ -208,7 +209,7 @@ export default function Dashboard() {
                                 <p className="text-gray-500 max-w-sm mb-8">Ready to start organizing your tasks? Create your first one above.</p>
                             </div>
                         ) : viewMode === 'kanban' ? (
-                            <KanbanBoard onTaskClick={setSelectedTask} />
+                            <KanbanBoard tasks={filteredTasks} onTaskClick={setSelectedTask} />
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-12">
                                 {filteredTasks.map((task) => (
@@ -251,6 +252,7 @@ export default function Dashboard() {
                             </div>
                         )}
                     </div>
+                    <Footer />
                 </div>
             </main>
 

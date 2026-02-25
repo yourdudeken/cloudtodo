@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Shield, Cloud, Zap, ArrowRight, CheckCircle2, Github } from 'lucide-react';
+import { Footer } from '@/components/Footer';
 
 export default function Landing() {
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -194,24 +195,7 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* Footer */}
-            <footer className="relative z-10 py-20 border-t border-white/5 bg-black">
-                <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
-                    <div className="flex items-center gap-2">
-                        <Cloud className="w-5 h-5 text-indigo-500" />
-                        <span className="font-bold tracking-tight">CloudTodo</span>
-                    </div>
-
-                    <div className="text-gray-500 text-sm">
-                        © 2026 CloudTodo. Built for the privacy-conscious.
-                    </div>
-
-                    <div className="flex items-center gap-6">
-                        <a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a>
-                        <a href="https://github.com/yourdudeken/cloudtodo" className="text-gray-400 hover:text-white transition-colors">GitHub</a>
-                    </div>
-                </div>
-            </footer>
+            <Footer />
         </div>
     );
 }
