@@ -28,16 +28,16 @@ export default function Landing() {
             {/* Navbar */}
             <nav className="relative z-50 border-b border-white/5 bg-black/50 backdrop-blur-xl sticky top-0">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-                    <div className="flex items-center gap-2 group cursor-pointer">
+                    <Link to="/" className="flex items-center gap-2 group cursor-pointer">
                         <span className="text-2xl font-bold tracking-tighter bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent uppercase">
                             CloudTodo
                         </span>
-                    </div>
+                    </Link>
 
                     <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-400">
-                        <a href="#features" className="hover:text-white transition-colors">Features</a>
-                        <a href="#how-it-works" className="hover:text-white transition-colors">How it Works</a>
-                        <a href="#security" className="hover:text-white transition-colors">Security</a>
+                        <Link to="/features" className="hover:text-white transition-colors">Features</Link>
+                        <Link to="/how-it-works" className="hover:text-white transition-colors">How it Works</Link>
+                        <Link to="/how-it-works" className="hover:text-white transition-colors">Security</Link>
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -144,6 +144,53 @@ export default function Landing() {
                                 <p className="text-gray-400 leading-relaxed">{feature.description}</p>
                             </div>
                         ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* Security Section */}
+            <section id="security" className="relative z-10 py-32 border-t border-white/5 bg-black">
+                <div className="max-w-7xl mx-auto px-6">
+                    <div className="flex flex-col md:flex-row items-center gap-16">
+                        <div className="flex-1 order-2 md:order-1">
+                            <div className="relative">
+                                <div className="absolute -inset-4 bg-indigo-500/20 blur-3xl rounded-full"></div>
+                                <div className="relative p-10 rounded-[3rem] bg-white/[0.02] border border-white/5 overflow-hidden">
+                                    <pre className="text-xs md:text-sm font-mono text-indigo-300 leading-relaxed">
+                                        <code>{`
+// CloudTodo Security Protocol
+{
+  "auth": "OAuth 2.0",
+  "data_storage": "Client-Side Only",
+  "encryption": "Google Drive Native",
+  "privacy": "Zero-Knowledge",
+  "third_party_sync": false,
+  "developer_access": false
+}
+                                        `}</code>
+                                    </pre>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex-1 order-1 md:order-2">
+                            <h2 className="text-4xl md:text-6xl font-black mb-8 tracking-tighter">Enterprise-grade security, <br /><span className="text-indigo-500">for everyone.</span></h2>
+                            <p className="text-gray-400 text-lg leading-relaxed mb-8">
+                                CloudTodo leverages Google’s multi-billion dollar security infrastructure.
+                                We don't store your tasks on our servers because we don't have servers for your tasks.
+                            </p>
+                            <ul className="space-y-4">
+                                {[
+                                    "No central database means no central point of failure.",
+                                    "Your data never leaves Google's encrypted environment.",
+                                    "Revoke access at any time from your Google Dashboard."
+                                ].map((item, i) => (
+                                    <li key={i} className="flex items-center gap-3 text-gray-300">
+                                        <Shield className="w-5 h-5 text-indigo-500" />
+                                        <span>{item}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </section>

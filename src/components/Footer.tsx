@@ -18,10 +18,10 @@ export function Footer() {
                             professional.
                         </p>
                         <div className="flex items-center gap-5">
-                            <a href="#" className="text-gray-400 hover:text-indigo-400 transition-colors">
+                            <a href="https://x.com/cloudtodo" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-indigo-400 transition-colors">
                                 <Twitter className="w-5 h-5" />
                             </a>
-                            <a href="https://github.com/yourdudeken/cloudtodo" className="text-gray-400 hover:text-indigo-400 transition-colors">
+                            <a href="https://github.com/yourdudeken/cloudtodo" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-indigo-400 transition-colors">
                                 <Github className="w-5 h-5" />
                             </a>
                             <a href="mailto:hello@cloudtodo.com" className="text-gray-400 hover:text-indigo-400 transition-colors">
@@ -31,20 +31,24 @@ export function Footer() {
                     </div>
 
                     <div>
-                        <h4 className="text-white font-bold mb-6 uppercase tracking-[0.2em] text-[10px]">Product</h4>
+                        <h4 className="mb-6 uppercase tracking-[0.2em] text-[10px]">
+                            <Link to="/product" className="text-white font-bold hover:text-indigo-400 transition-colors">Product</Link>
+                        </h4>
                         <ul className="space-y-4 text-sm text-gray-500 font-medium">
-                            <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                            <li><a href="#how-it-works" className="hover:text-white transition-colors">How it works</a></li>
-                            <li><Link to="/login" className="hover:text-white transition-colors">Desktop App</Link></li>
+                            <li><Link to="/features" className="hover:text-white transition-colors">Features</Link></li>
+                            <li><Link to="/how-it-works" className="hover:text-white transition-colors">How it works</Link></li>
+                            <li><Link to="/desktop" className="hover:text-white transition-colors">Desktop App</Link></li>
                         </ul>
                     </div>
 
                     <div>
-                        <h4 className="text-white font-bold mb-6 uppercase tracking-[0.2em] text-[10px]">Company</h4>
+                        <h4 className="mb-6 uppercase tracking-[0.2em] text-[10px]">
+                            <Link to="/company" className="text-white font-bold hover:text-indigo-400 transition-colors">Company</Link>
+                        </h4>
                         <ul className="space-y-4 text-sm text-gray-500 font-medium">
-                            <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
-                            <li><a href="#" className="hover:text-white transition-colors">Terms of Service</a></li>
-                            <li><a href="https://github.com/yourdudeken/cloudtodo" className="flex items-center gap-2 hover:text-white transition-colors">
+                            <li><Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+                            <li><Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
+                            <li><a href="https://github.com/yourdudeken/cloudtodo" target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-white transition-colors">
                                 Open Source <ExternalLink className="w-3 h-3" />
                             </a></li>
                         </ul>
