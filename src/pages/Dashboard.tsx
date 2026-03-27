@@ -19,6 +19,13 @@ export default function Dashboard() {
 
     useEffect(() => {
         fetchTasks();
+
+        // Collaborative Polling: Sync tasks in background every 30s
+        const interval = setInterval(() => {
+            fetchTasks(true);
+        }, 30000);
+
+        return () => clearInterval(interval);
     }, [fetchTasks]);
 
     const categories = useMemo(() => {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Task, PriorityLevel, Attachments, AttachmentItem, GoogleDrivePermission } from '@/types';
 import { useTasksStore } from '@/store/tasksStore';
+import { useAuthStore } from '@/store/authStore';
 import { googleDriveService } from '@/lib/googleDrive';
 import {
     Dialog,
@@ -76,6 +77,7 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
     const [editForm, setEditForm] = useState<Partial<Task>>({});
     const [newFiles, setNewFiles] = useState<File[]>([]);
     const [removedAttachmentIds, setRemovedAttachmentIds] = useState<string[]>([]);
+    const [newComment, setNewComment] = useState('');
 
     useEffect(() => {
         if (task) {
@@ -83,6 +85,7 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
             setNewFiles([]);
             setRemovedAttachmentIds([]);
             setIsEditing(false);
+            setNewComment('');
         }
     }, [task]);
 
@@ -134,6 +137,28 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
         } catch (error) {
             console.error('Failed to remove permission:', error);
         }
+    };
+
+    const handleAddComment = async () => {
+        const { user } = useAuthStore.getState();
+        if (!newComment.trim() || !task || !user) return;
+
+        const comment = {
+            id: crypto.randomUUID(),
+            userId: user.id,
+            userEmail: user.email,
+            content: newComment.trim(),
+            createdAt: new Date().toISOString()
+        };
+
+        const updatedTask = {
+            ...task,
+            comments: [...(task.comments || []), comment],
+            updatedDate: new Date().toISOString()
+        };
+
+        await updateTask(updatedTask);
+        setNewComment('');
     };
 
     if (!task) return null;
@@ -419,6 +444,53 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                 </div>
                             </div>
                         )}
+
+                        <div className="grid gap-6 mt-8">
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-500 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                                Communications Hub
+                            </h4>
+                            <div className="space-y-4">
+                                <div className="max-h-[300px] overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                                    {!task.comments || task.comments.length === 0 ? (
+                                        <div className="text-sm text-gray-600 italic px-4 py-8 text-center bg-white/[0.01] rounded-2xl border border-dashed border-white/5">
+                                            No transmissions yet. Start the conversation below.
+                                        </div>
+                                    ) : (
+                                        task.comments.map((comment) => (
+                                            <div key={comment.id} className="flex gap-4 p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+                                                <div className="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center text-[10px] font-black text-indigo-400 border border-indigo-500/10 flex-shrink-0">
+                                                    {comment.userEmail.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-xs font-bold text-gray-400">{comment.userEmail}</span>
+                                                        <span className="text-[9px] font-medium text-gray-600">{new Date(comment.createdAt).toLocaleTimeString()}</span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-300 leading-relaxed">{comment.content}</p>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                <div className="relative mt-4">
+                                    <textarea
+                                        value={newComment}
+                                        onChange={(e) => setNewComment(e.target.value)}
+                                        placeholder="Broadcast a message..."
+                                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 pr-16 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all resize-none h-24"
+                                    />
+                                    <button
+                                        onClick={handleAddComment}
+                                        disabled={!newComment.trim()}
+                                        className="absolute bottom-4 right-4 p-2.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:grayscale transition-all shadow-lg shadow-indigo-600/20"
+                                    >
+                                        <Send className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
 
                         <div className="border-t border-white/5 pt-12">
                             <div className="flex items-center justify-between mb-8">
