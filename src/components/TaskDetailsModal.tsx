@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import type { Task, PriorityLevel, Attachments, AttachmentItem } from '@/types';
+import { useState, useEffect, useCallback } from 'react';
+import type { Task, PriorityLevel, Attachments, AttachmentItem, GoogleDrivePermission } from '@/types';
 import { useTasksStore } from '@/store/tasksStore';
-import { googleDriveService, SUBFOLDERS } from '@/lib/googleDrive';
+import { googleDriveService } from '@/lib/googleDrive';
 import {
     Dialog,
     DialogContent,
@@ -24,10 +24,12 @@ function DriveImage({ fileId, alt }: { fileId: string; alt: string }) {
 
     useEffect(() => {
         let isMounted = true;
+        let objectUrl: string | null = null;
+
         const fetchImage = async () => {
             try {
                 const blob = await googleDriveService.getFileBlob(fileId);
-                const objectUrl = URL.createObjectURL(blob);
+                objectUrl = URL.createObjectURL(blob);
                 if (isMounted) {
                     setUrl(objectUrl);
                     setLoading(false);
@@ -41,7 +43,7 @@ function DriveImage({ fileId, alt }: { fileId: string; alt: string }) {
         fetchImage();
         return () => {
             isMounted = false;
-            if (url) URL.revokeObjectURL(url);
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
         };
     }, [fileId]);
 
@@ -90,17 +92,11 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
         return item.name || `${fallback} ${item.id.slice(0, 8)}`;
     };
 
-    const [permissions, setPermissions] = useState<any[]>([]);
+    const [permissions, setPermissions] = useState<GoogleDrivePermission[]>([]);
     const [isSharing, setIsSharing] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
 
-    useEffect(() => {
-        if (task?.googleDriveFileId) {
-            fetchPermissions();
-        }
-    }, [task?.googleDriveFileId]);
-
-    const fetchPermissions = async () => {
+    const fetchPermissions = useCallback(async () => {
         if (!task?.googleDriveFileId) return;
         try {
             const perms = await googleDriveService.getPermissions(task.googleDriveFileId);
@@ -108,7 +104,13 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
         } catch (error) {
             console.error('Failed to fetch permissions:', error);
         }
-    };
+    }, [task?.googleDriveFileId]);
+
+    useEffect(() => {
+        if (task?.googleDriveFileId) {
+            fetchPermissions();
+        }
+    }, [task?.googleDriveFileId, fetchPermissions]);
 
     const handleInvite = async () => {
         if (!inviteEmail || !task?.googleDriveFileId) return;
@@ -149,7 +151,7 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
     const removeExistingAttachment = (type: keyof Attachments, id: string) => {
         if (!editForm.attachments) return;
         const updated = { ...editForm.attachments };
-        updated[type] = (updated[type] as any[]).filter(item => {
+        updated[type] = (updated[type] as AttachmentItem[]).filter(item => {
             const itemId = typeof item === 'string' ? item : item.id;
             return itemId !== id;
         });
@@ -186,17 +188,12 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
 
             // 1. Upload new files
             for (const file of newFiles) {
-                let category: keyof typeof SUBFOLDERS = 'DOCUMENTS';
-                if (file.type.startsWith('image/')) category = 'PICTURES';
-                else if (file.type.startsWith('video/')) category = 'VIDEOS';
-                else if (file.type.startsWith('audio/')) category = 'AUDIOS';
-
-                const uploaded = await googleDriveService.uploadAttachment(file, category);
+                const uploaded = await googleDriveService.uploadAttachment(file, task.id);
                 const item: AttachmentItem = { id: uploaded.id, name: uploaded.name, mimeType: uploaded.mimeType };
 
-                if (category === 'PICTURES') finalAttachments.images.push(item);
-                else if (category === 'VIDEOS') finalAttachments.videos.push(item);
-                else if (category === 'AUDIOS') finalAttachments.audio.push(item);
+                if (file.type.startsWith('image/')) finalAttachments.images.push(item);
+                else if (file.type.startsWith('video/')) finalAttachments.videos.push(item);
+                else if (file.type.startsWith('audio/')) finalAttachments.audio.push(item);
                 else finalAttachments.documents.push(item);
             }
 
@@ -317,7 +314,7 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                     />
                                     <select
                                         value={editForm.status}
-                                        onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}
+                                        onChange={(e) => setEditForm({ ...editForm, status: e.target.value as Task['status'] })}
                                         className="bg-white/5 border border-white/10 rounded-xl px-4 text-sm font-bold uppercase tracking-widest outline-none focus:ring-2 focus:ring-indigo-500/20"
                                     >
                                         <option value="todo">To Do</option>
@@ -491,8 +488,8 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                             {editForm.attachments && [...editForm.attachments.documents, ...editForm.attachments.audio, ...editForm.attachments.videos].map((item) => {
                                                 const id = getAttachmentId(item);
                                                 const name = getAttachmentName(item);
-                                                const isDoc = (editForm.attachments?.documents as any[]).some(i => (typeof i === 'string' ? i : i.id) === id);
-                                                const isAudio = (editForm.attachments?.audio as any[]).some(i => (typeof i === 'string' ? i : i.id) === id);
+                                                const isDoc = (editForm.attachments?.documents as AttachmentItem[]).some(i => (typeof i === 'string' ? i : i.id) === id);
+                                                const isAudio = (editForm.attachments?.audio as AttachmentItem[]).some(i => (typeof i === 'string' ? i : i.id) === id);
 
                                                 return (
                                                     <div key={id} className="relative group">
@@ -505,7 +502,7 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                                             <button
                                                                 onClick={() => {
                                                                     const type = isDoc ? 'documents' : isAudio ? 'audio' : 'videos';
-                                                                    removeExistingAttachment(type as any, id);
+                                                                    removeExistingAttachment(type as keyof Attachments, id);
                                                                 }}
                                                                 className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg z-10"
                                                             >

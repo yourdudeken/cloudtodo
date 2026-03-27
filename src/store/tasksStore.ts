@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Task, Attachments, AttachmentItem } from '@/types';
+import type { Task } from '@/types';
 import { googleDriveService } from '@/lib/googleDrive';
 
 interface TasksState {
@@ -33,7 +33,7 @@ export const useTasksStore = create<TasksState>()(
                 const { folderIds } = useTasksStore.getState();
                 set({ isLoading: true, error: null });
                 try {
-                    const result = await googleDriveService.listTasks(folderIds?.ROOT);
+                    const result = await googleDriveService.listTasks(folderIds?.TASKS);
                     // If we didn't have folderIds, listTasks will have called ensureFolderStructure
                     // and return tasks. We should ensure we have the folders now.
                     if (!folderIds) {
@@ -52,7 +52,7 @@ export const useTasksStore = create<TasksState>()(
                 const { folderIds } = useTasksStore.getState();
                 set({ isLoading: true, error: null });
                 try {
-                    const savedTask = await googleDriveService.createTask(newTask, folderIds?.ROOT);
+                    const savedTask = await googleDriveService.createTask(newTask, folderIds?.TASKS);
                     set((state) => ({
                         tasks: [...state.tasks, savedTask],
                         isLoading: false
@@ -94,26 +94,22 @@ export const useTasksStore = create<TasksState>()(
             },
 
             deleteTask: async (id, fileId) => {
+                const { folderIds } = useTasksStore.getState();
                 set({ isLoading: true, error: null });
                 try {
-                    const task = useTasksStore.getState().tasks.find(t => t.id === id);
-                    if (task) {
-                        // Delete all attachments from Drive
-                        const attachmentTypes: (keyof Attachments)[] = ['audio', 'images', 'documents', 'videos'];
-                        for (const type of attachmentTypes) {
-                            const items = task.attachments[type] as (string | AttachmentItem)[];
-                            for (const item of items) {
-                                const attachmentFileId = typeof item === 'string' ? item : item.id;
-                                try {
-                                    await googleDriveService.deleteTask(attachmentFileId);
-                                } catch (e) {
-                                    console.error(`Failed to delete attachment ${attachmentFileId}`, e);
-                                }
+                    // 1. Delete the task folder in attachments if it exists
+                    if (folderIds?.ATTACHMENTS) {
+                        try {
+                            const taskAttachmentsFolderId = await googleDriveService.findFolder(id, folderIds.ATTACHMENTS);
+                            if (taskAttachmentsFolderId) {
+                                await googleDriveService.deleteTask(taskAttachmentsFolderId);
                             }
+                        } catch (e) {
+                            console.error(`Failed to delete attachments folder for task ${id}`, e);
                         }
                     }
 
-                    // Delete the task file itself
+                    // 2. Delete the task file itself
                     await googleDriveService.deleteTask(fileId);
 
                     set((state) => ({

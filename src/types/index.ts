@@ -64,3 +64,12 @@ export interface GoogleTokenResponse {
     token_type: string;
     id_token?: string;
 }
+
+export interface GoogleDrivePermission {
+    id: string;
+    emailAddress?: string;
+    role: 'owner' | 'organizer' | 'fileOrganizer' | 'writer' | 'commenter' | 'reader';
+    displayName?: string;
+    photoLink?: string;
+    type: 'user' | 'group' | 'domain' | 'anyone';
+}

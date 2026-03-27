@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Loader2, Paperclip, X, Image, Music, Video, File as FileIcon, Star, Pin, User, Users } from 'lucide-react';
 import type { PriorityLevel, Attachments } from '@/types';
-import { googleDriveService, SUBFOLDERS } from '@/lib/googleDrive';
+import { googleDriveService } from '@/lib/googleDrive';
 
 export function CreateTaskModal() {
     const [open, setOpen] = useState(false);
@@ -59,21 +59,7 @@ export function CreateTaskModal() {
         const attachments: Attachments = { audio: [], images: [], documents: [], videos: [] };
 
         try {
-            for (const file of files) {
-                let category: keyof typeof SUBFOLDERS = 'DOCUMENTS';
-                if (file.type.startsWith('image/')) category = 'PICTURES';
-                else if (file.type.startsWith('video/')) category = 'VIDEOS';
-                else if (file.type.startsWith('audio/')) category = 'AUDIOS';
-
-                const uploaded = await googleDriveService.uploadAttachment(file, category);
-                const item = { id: uploaded.id, name: uploaded.name, mimeType: uploaded.mimeType };
-
-                if (category === 'PICTURES') attachments.images.push(item);
-                else if (category === 'VIDEOS') attachments.videos.push(item);
-                else if (category === 'AUDIOS') attachments.audio.push(item);
-                else attachments.documents.push(item);
-            }
-
+            // 1. Create the task first to get an ID
             const savedTask = await addTask({
                 taskTitle: formData.title,
                 description: formData.description,
@@ -91,13 +77,34 @@ export function CreateTaskModal() {
                 tags: [],
                 recurrence: 'None',
                 status: 'todo',
-                attachments,
+                attachments, // Empty for now
                 comments: [],
                 createdDate: new Date().toISOString(),
                 updatedDate: new Date().toISOString(),
             });
 
-            // If collaborative and email provided, share the file
+            if (!savedTask.id) throw new Error("Task created but no ID returned");
+
+            // 2. Upload attachments to the task's folder
+            for (const file of files) {
+                const uploaded = await googleDriveService.uploadAttachment(file, savedTask.id);
+                const item = { id: uploaded.id, name: uploaded.name, mimeType: uploaded.mimeType };
+
+                if (file.type.startsWith('image/')) attachments.images.push(item);
+                else if (file.type.startsWith('video/')) attachments.videos.push(item);
+                else if (file.type.startsWith('audio/')) attachments.audio.push(item);
+                else attachments.documents.push(item);
+            }
+
+            // 3. Update the task with the uploaded attachments
+            if (files.length > 0) {
+                await useTasksStore.getState().updateTask({
+                    ...savedTask,
+                    attachments
+                });
+            }
+
+            // 4. If collaborative and email provided, share the file
             if (!formData.isPersonal && formData.collaboratorEmail && savedTask.googleDriveFileId) {
                 await googleDriveService.shareFile(savedTask.googleDriveFileId, formData.collaboratorEmail);
             }

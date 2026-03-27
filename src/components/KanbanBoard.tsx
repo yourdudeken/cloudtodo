@@ -1,6 +1,7 @@
 import { useTasksStore } from '@/store/tasksStore';
 import type { Task } from '@/types';
 import { MoreHorizontal, Plus, ArrowRight, Clock, CheckCircle2, Circle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export function KanbanBoard({
     tasks,
@@ -11,7 +12,7 @@ export function KanbanBoard({
 }) {
     const { updateTaskStatus } = useTasksStore();
 
-    const statuses = [
+    const statuses: { id: Task['status'], label: string, icon: LucideIcon, color: string }[] = [
         { id: 'todo', label: 'To Do', icon: Circle, color: 'text-gray-400' },
         { id: 'in-progress', label: 'In Progress', icon: Clock, color: 'text-indigo-400' },
         { id: 'completed', label: 'Completed', icon: CheckCircle2, color: 'text-green-400' },
@@ -21,10 +22,10 @@ export function KanbanBoard({
         e.preventDefault();
     };
 
-    const onDrop = (e: React.DragEvent, status: string) => {
+    const onDrop = (e: React.DragEvent, status: Task['status']) => {
         const taskId = e.dataTransfer.getData('taskId');
         if (taskId) {
-            updateTaskStatus(taskId, status as any);
+            updateTaskStatus(taskId, status);
         }
     };
 
