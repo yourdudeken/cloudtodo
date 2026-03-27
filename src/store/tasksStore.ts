@@ -10,7 +10,7 @@ interface TasksState {
     selectedCategory: string | null;
     isLoading: boolean;
     error: string | null;
-    fetchTasks: () => Promise<void>;
+    fetchTasks: (isBackground?: boolean) => Promise<void>;
     addTask: (task: Omit<Task, 'id' | 'googleDriveFileId'>) => Promise<Task>;
     updateTask: (task: Task) => Promise<void>;
     updateTaskStatus: (id: string, status: Task['status']) => Promise<void>;
@@ -29,9 +29,9 @@ export const useTasksStore = create<TasksState>()(
             isLoading: false,
             error: null,
 
-            fetchTasks: async () => {
+            fetchTasks: async (isBackground = false) => {
                 const { folderIds } = useTasksStore.getState();
-                set({ isLoading: true, error: null });
+                if (!isBackground) set({ isLoading: true, error: null });
                 try {
                     const result = await googleDriveService.listTasks(folderIds?.TASKS);
                     // If we didn't have folderIds, listTasks will have called ensureFolderStructure
@@ -44,7 +44,7 @@ export const useTasksStore = create<TasksState>()(
                     }
                 } catch (error) {
                     console.error('Failed to fetch tasks:', error);
-                    set({ error: 'Failed to fetch tasks', isLoading: false });
+                    if (!isBackground) set({ error: 'Failed to fetch tasks', isLoading: false });
                 }
             },
 
@@ -75,7 +75,7 @@ export const useTasksStore = create<TasksState>()(
                     }));
                 } catch (error) {
                     console.error('Failed to update task:', error);
-                    set({ error: 'Failed to update task', isLoading: false });
+                    set({ error: 'Update failed. Check for collaborative changes.', isLoading: false });
                 }
             },
 
@@ -94,22 +94,28 @@ export const useTasksStore = create<TasksState>()(
             },
 
             deleteTask: async (id, fileId) => {
-                const { folderIds } = useTasksStore.getState();
+                let { folderIds } = useTasksStore.getState();
                 set({ isLoading: true, error: null });
                 try {
-                    // 1. Delete the task folder in attachments if it exists
+                    // 1. Ensure folderIds exist
+                    if (!folderIds) {
+                        folderIds = await googleDriveService.ensureFolderStructure();
+                        set({ folderIds });
+                    }
+
+                    // 2. Delete the task folder in attachments if it exists
                     if (folderIds?.ATTACHMENTS) {
                         try {
                             const taskAttachmentsFolderId = await googleDriveService.findFolder(id, folderIds.ATTACHMENTS);
                             if (taskAttachmentsFolderId) {
-                                await googleDriveService.deleteTask(taskAttachmentsFolderId);
+                                await googleDriveService.deleteFolderRecursive(taskAttachmentsFolderId);
                             }
                         } catch (e) {
                             console.error(`Failed to delete attachments folder for task ${id}`, e);
                         }
                     }
 
-                    // 2. Delete the task file itself
+                    // 3. Delete the task file itself
                     await googleDriveService.deleteTask(fileId);
 
                     set((state) => ({

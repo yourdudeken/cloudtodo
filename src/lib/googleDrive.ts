@@ -175,6 +175,41 @@ export const googleDriveService = {
         });
     },
 
+    async listFilesInFolder(folderId: string) {
+        const query = `'${folderId}' in parents and trashed=false`;
+        const response = await axios.get(`${DRIVE_API_URL}/files`, {
+            params: {
+                q: query,
+                fields: 'files(id, name, mimeType)',
+                spaces: 'drive'
+            },
+            headers: getHeaders()
+        });
+        return response.data.files || [];
+    },
+
+    async deleteFolderRecursive(folderId: string) {
+        try {
+            // 1. List all files in the folder
+            const files = await this.listFilesInFolder(folderId);
+
+            // 2. Delete each file/subfolder
+            for (const file of files) {
+                if (file.mimeType === 'application/vnd.google-apps.folder') {
+                    await this.deleteFolderRecursive(file.id);
+                } else {
+                    await this.deleteTask(file.id);
+                }
+            }
+
+            // 3. Delete the folder itself
+            await this.deleteTask(folderId);
+        } catch (error) {
+            console.error(`Failed to recursively delete folder ${folderId}:`, error);
+            throw error;
+        }
+    },
+
     async ensureTaskAttachmentsFolder(taskId: string) {
         const folders = await this.ensureFolderStructure();
         const attachmentsRootId = folders.ATTACHMENTS;
