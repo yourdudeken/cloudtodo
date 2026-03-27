@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Loader2, Paperclip, X, Image, Music, Video, File as FileIcon, Star, Pin, User, Users } from 'lucide-react';
 import type { PriorityLevel, Attachments } from '@/types';
-import { googleDriveService, SUBFOLDERS } from '@/lib/googleDrive';
+import { googleDriveService } from '@/lib/googleDrive';
 
 export function CreateTaskModal() {
     const [open, setOpen] = useState(false);

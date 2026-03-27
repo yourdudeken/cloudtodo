@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Task, PriorityLevel, Attachments, AttachmentItem, GoogleDrivePermission } from '@/types';
 import { useTasksStore } from '@/store/tasksStore';
-import { googleDriveService, SUBFOLDERS } from '@/lib/googleDrive';
+import { googleDriveService } from '@/lib/googleDrive';
 import {
     Dialog,
     DialogContent,

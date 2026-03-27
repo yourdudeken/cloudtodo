@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Task, Attachments, AttachmentItem } from '@/types';
+import type { Task } from '@/types';
 import { googleDriveService } from '@/lib/googleDrive';
 
 interface TasksState {
