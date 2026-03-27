@@ -7,11 +7,16 @@ const UPLOAD_API_URL = 'https://www.googleapis.com/upload/drive/v3';
 
 const ROOT_FOLDER_NAME = 'CLOUDTODO';
 export const SUBFOLDERS = {
-    AUDIOS: 'AUDIOS',
-    VIDEOS: 'VIDEOS',
-    DOCUMENTS: 'DOCUMENTS',
-    PICTURES: 'PICTURES'
+    TASKS: 'tasks',
+    ATTACHMENTS: 'attachments'
 };
+
+interface DriveFile {
+    id: string;
+    name: string;
+    parents?: string[];
+    appProperties?: Record<string, string>;
+}
 
 const getHeaders = (contentType: string = 'application/json', token?: string) => {
     const accessToken = token || useAuthStore.getState().user?.accessToken;
@@ -33,6 +38,8 @@ export const googleDriveService = {
                 rootFolderId = await this.createFolder(ROOT_FOLDER_NAME, 'root', token);
             }
 
+            if (!rootFolderId) throw new Error("Failed to ensure root folder");
+
             // 2. Check for subfolders
             const folderIds: Record<string, string> = { ROOT: rootFolderId };
 
@@ -41,6 +48,7 @@ export const googleDriveService = {
                 if (!folderId) {
                     folderId = await this.createFolder(name, rootFolderId, token);
                 }
+                if (!folderId) throw new Error(`Failed to ensure subfolder: ${name}`);
                 folderIds[key] = folderId;
             }
 
@@ -52,10 +60,7 @@ export const googleDriveService = {
     },
 
     async findFolder(name: string, parentId: string = 'root', token?: string) {
-        // For the root folder, we can be slightly more flexible with the parent constraint
-        // to ensure we find it even if 'root' alias behaves unexpectedly in some API states.
         const parentQuery = `'${parentId}' in parents`;
-
         const query = `mimeType='application/vnd.google-apps.folder' and name='${name}' and ${parentQuery} and trashed=false`;
 
         const response = await axios.get(`${DRIVE_API_URL}/files`, {
@@ -67,10 +72,9 @@ export const googleDriveService = {
             headers: getHeaders('application/json', token)
         });
 
-        // If we found multiple, filter strictly by the requested parentId if it's not 'root'
-        const files = response.data.files || [];
+        const files: DriveFile[] = response.data.files || [];
         if (parentId !== 'root') {
-            return files.find((f: any) => f.parents?.includes(parentId))?.id || null;
+            return files.find((f: DriveFile) => f.parents?.includes(parentId))?.id || null;
         }
 
         return files[0]?.id || null;
@@ -89,14 +93,13 @@ export const googleDriveService = {
         return response.data.id;
     },
 
-    async listTasks(rootFolderId?: string) {
-        if (!rootFolderId) {
+    async listTasks(tasksFolderId?: string) {
+        if (!tasksFolderId) {
             const folders = await this.ensureFolderStructure();
-            rootFolderId = folders.ROOT;
+            tasksFolderId = folders.TASKS;
         }
 
-        // Search for tasks in the root folder OR files shared with the user
-        const query = `('${rootFolderId}' in parents or sharedWithMe = true) and mimeType='application/json' and trashed=false`;
+        const query = `('${tasksFolderId}' in parents or sharedWithMe = true) and mimeType='application/json' and trashed=false`;
         const response = await axios.get(`${DRIVE_API_URL}/files`, {
             params: {
                 q: query,
@@ -107,8 +110,8 @@ export const googleDriveService = {
         });
 
         const tasks: Task[] = [];
-        for (const file of response.data.files) {
-            // Only process our tasks
+        const files: DriveFile[] = response.data.files || [];
+        for (const file of files) {
             if (file.appProperties?.app !== 'cloudtodo') continue;
 
             try {
@@ -129,16 +132,16 @@ export const googleDriveService = {
         return response.data;
     },
 
-    async createTask(task: Omit<Task, 'id' | 'googleDriveFileId'>, rootFolderId?: string) {
-        if (!rootFolderId) {
+    async createTask(task: Omit<Task, 'id' | 'googleDriveFileId'>, tasksFolderId?: string) {
+        if (!tasksFolderId) {
             const folders = await this.ensureFolderStructure();
-            rootFolderId = folders.ROOT;
+            tasksFolderId = folders.TASKS;
         }
 
         const metadata = {
             name: `task-${Date.now()}.json`,
             mimeType: 'application/json',
-            parents: [rootFolderId],
+            parents: [tasksFolderId],
             appProperties: {
                 app: 'cloudtodo',
                 type: task.taskType.isPersonal ? 'personal' : 'collaborative'
@@ -150,7 +153,7 @@ export const googleDriveService = {
         form.append('file', new Blob([JSON.stringify(task)], { type: 'application/json' }));
 
         const response = await axios.post(`${UPLOAD_API_URL}/files?uploadType=multipart`, form, {
-            headers: getHeaders('multipart/related') // axios will set boundary
+            headers: getHeaders('multipart/related')
         });
 
         return { ...task, id: response.data.id, googleDriveFileId: response.data.id };
@@ -172,14 +175,25 @@ export const googleDriveService = {
         });
     },
 
-    async uploadAttachment(file: File, type: keyof typeof SUBFOLDERS) {
+    async ensureTaskAttachmentsFolder(taskId: string) {
         const folders = await this.ensureFolderStructure();
-        const parentId = folders[type];
+        const attachmentsRootId = folders.ATTACHMENTS;
+
+        let taskFolderId = await this.findFolder(taskId, attachmentsRootId);
+        if (!taskFolderId) {
+            taskFolderId = await this.createFolder(taskId, attachmentsRootId);
+        }
+        return taskFolderId;
+    },
+
+    async uploadAttachment(file: File, taskId: string) {
+        const taskFolderId = await this.ensureTaskAttachmentsFolder(taskId);
+        if (!taskFolderId) throw new Error("Could not create task attachments folder");
 
         const metadata = {
             name: file.name,
             mimeType: file.type,
-            parents: [parentId]
+            parents: [taskFolderId]
         };
 
         const form = new FormData();
