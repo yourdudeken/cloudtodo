@@ -8,6 +8,7 @@ export function Footer() {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
                     <div className="col-span-1 md:col-span-2">
                         <Link to="/" className="flex items-center gap-2 mb-6 group w-fit">
+                            <img src="/logo.svg" alt="CloudTodo Logo" className="w-8 h-8 group-hover:scale-110 transition-transform duration-300" />
                             <span className="text-2xl font-black tracking-tighter bg-gradient-to-r from-white to-gray-500 bg-clip-text text-transparent uppercase">
                                 CloudTodo
                             </span>
