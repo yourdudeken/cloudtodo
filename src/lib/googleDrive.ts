@@ -16,6 +16,7 @@ interface DriveFile {
     name: string;
     parents?: string[];
     appProperties?: Record<string, string>;
+    properties?: Record<string, string>;
 }
 
 const getHeaders = (contentType: string = 'application/json', token?: string) => {
@@ -103,7 +104,7 @@ export const googleDriveService = {
         const response = await axios.get(`${DRIVE_API_URL}/files`, {
             params: {
                 q: query,
-                fields: 'files(id, name, createdTime, modifiedTime, appProperties, shared)',
+                fields: 'files(id, name, createdTime, modifiedTime, appProperties, properties, shared)',
                 spaces: 'drive'
             },
             headers: getHeaders()
@@ -112,7 +113,10 @@ export const googleDriveService = {
         const tasks: Task[] = [];
         const files: DriveFile[] = response.data.files || [];
         for (const file of files) {
-            if (file.appProperties?.app !== 'cloudtodo') continue;
+            // Check both properties and appProperties for backward compatibility
+            // appProperties are private to the user/app, properties are public to any user with access to the file
+            const isOurApp = file.properties?.app === 'cloudtodo' || file.appProperties?.app === 'cloudtodo';
+            if (!isOurApp) continue;
 
             try {
                 const content = await this.readFile(file.id);
@@ -142,7 +146,7 @@ export const googleDriveService = {
             name: `task-${Date.now()}.json`,
             mimeType: 'application/json',
             parents: [tasksFolderId],
-            appProperties: {
+            properties: {
                 app: 'cloudtodo',
                 type: task.taskType.isPersonal ? 'personal' : 'collaborative'
             }
@@ -249,6 +253,24 @@ export const googleDriveService = {
             responseType: 'blob'
         });
         return response.data;
+    },
+
+    async shareTask(taskId: string, email: string) {
+        // 1. Share the task file itself
+        await this.shareFile(taskId, email);
+
+        // 2. Share the attachments folder if it exists
+        try {
+            const folders = await this.ensureFolderStructure();
+            const attachmentsRootId = folders.ATTACHMENTS;
+            const taskFolderId = await this.findFolder(taskId, attachmentsRootId);
+            if (taskFolderId) {
+                await this.shareFile(taskFolderId, email);
+            }
+        } catch (error) {
+            console.error('Failed to share attachments folder:', error);
+            // Non-blocking error, task file is already shared
+        }
     },
 
     async shareFile(fileId: string, email: string) {
