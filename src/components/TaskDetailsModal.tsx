@@ -119,7 +119,7 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
         if (!inviteEmail || !task?.googleDriveFileId) return;
         setIsSharing(true);
         try {
-            await googleDriveService.shareFile(task.googleDriveFileId, inviteEmail);
+            await googleDriveService.shareTask(task.googleDriveFileId, inviteEmail);
             setInviteEmail('');
             await fetchPermissions();
         } catch (error) {

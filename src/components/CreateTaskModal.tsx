@@ -104,9 +104,9 @@ export function CreateTaskModal() {
                 });
             }
 
-            // 4. If collaborative and email provided, share the file
+            // 4. If collaborative and email provided, share the task (file + attachments folder)
             if (!formData.isPersonal && formData.collaboratorEmail && savedTask.googleDriveFileId) {
-                await googleDriveService.shareFile(savedTask.googleDriveFileId, formData.collaboratorEmail);
+                await googleDriveService.shareTask(savedTask.googleDriveFileId, formData.collaboratorEmail);
             }
 
             setOpen(false);
