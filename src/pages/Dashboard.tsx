@@ -73,6 +73,7 @@ export default function Dashboard() {
             <aside className={`fixed md:relative inset-y-0 left-0 bg-black md:bg-white/[0.02] backdrop-blur-3xl border-r border-white/5 flex flex-col z-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full md:translate-x-0 w-0 border-r-0 overflow-hidden'}`}>
                 <div className="p-8 flex items-center justify-between">
                     <div className="flex items-center gap-3 group cursor-pointer" onClick={() => setActiveTab('All Tasks')}>
+                        <img src="/logo.svg" alt="CloudTodo Logo" className="w-8 h-8 group-hover:rotate-12 transition-transform duration-300" />
                         <span className="text-2xl font-bold tracking-tighter bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent uppercase">
                             CloudTodo
                         </span>

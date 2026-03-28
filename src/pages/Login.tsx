@@ -25,8 +25,9 @@ export default function Login() {
             <div className="flex-1 flex items-center justify-center py-20 relative z-10">
                 <div className="w-full max-w-md px-6">
                     {/* Logo Section */}
-                    <Link to="/" className="flex items-center justify-center gap-2 mb-12 group">
-                        <span className="text-3xl font-bold tracking-tighter bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent uppercase text-center w-full">
+                    <Link to="/" className="flex items-center justify-center gap-3 mb-12 group">
+                        <img src="/logo.svg" alt="CloudTodo Logo" className="w-10 h-10 group-hover:scale-110 transition-transform duration-300" />
+                        <span className="text-3xl font-bold tracking-tighter bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent uppercase">
                             CloudTodo
                         </span>
                     </Link>

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 
 export default function Desktop() {
     return (
-        <div className="min-h-screen bg-black text-white font-sans selection:bg-indigo-500/30">
+        <div className="min-h-screen flex flex-col bg-black text-white font-sans selection:bg-indigo-500/30">
             {/* Background Effects */}
             <div className="fixed inset-0 z-0 pointer-events-none">
                 <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/10 rounded-full mix-blend-screen filter blur-[120px] animate-pulse"></div>
@@ -14,7 +14,8 @@ export default function Desktop() {
             {/* Simple Nav */}
             <nav className="relative z-50 border-b border-white/5 bg-black/50 backdrop-blur-xl sticky top-0">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-                    <Link to="/" className="flex items-center gap-2 group cursor-pointer">
+                    <Link to="/" className="flex items-center gap-3 group cursor-pointer">
+                        <img src="/logo.svg" alt="CloudTodo Logo" className="w-8 h-8 group-hover:rotate-12 transition-transform duration-300" />
                         <span className="text-2xl font-bold tracking-tighter bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent uppercase">
                             CloudTodo
                         </span>
@@ -25,7 +26,7 @@ export default function Desktop() {
                 </div>
             </nav>
 
-            <main className="relative z-10 max-w-6xl mx-auto px-6 py-24">
+            <main className="flex-1 relative z-10 max-w-6xl mx-auto px-6 py-24">
                 <div className="text-center mb-24">
                     <h1 className="text-6xl md:text-8xl font-black mb-8 tracking-tighter">Your space, <br />everywhere.</h1>
                     <p className="text-xl text-gray-400 leading-relaxed font-medium max-w-2xl mx-auto">
